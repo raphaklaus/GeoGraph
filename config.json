@@ -1,0 +1,4 @@
+{
+  "enableElasticsearch": true,
+  "enablePostgis": true
+}
