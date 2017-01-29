@@ -1,0 +1,29 @@
+{
+  "name": "geograph",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@gitlab.com/dodiego/GeoGraph.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://gitlab.com/dodiego/GeoGraph/issues"
+  },
+  "homepage": "https://gitlab.com/dodiego/GeoGraph#README",
+  "dependencies": {
+    "async": "^2.1.4",
+    "elasticsearch": "^12.1.3",
+    "knex": "^0.12.6",
+    "lodash": "^4.17.4",
+    "lodash-uuid": "0.0.3",
+    "moment": "^2.17.1",
+    "seraph": "^0.15.2",
+    "terraformer-wkt-parser": "^1.1.2"
+  }
+}
