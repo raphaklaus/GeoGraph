@@ -6,14 +6,13 @@
         knex           = require('knex'),
         seraph         = require('seraph'),
         elasticsearch  = require('elasticsearch'),
-        config         = require('./config.json'),
         wkt            = require('terraformer-wkt-parser'),
         moment         = require('moment'),
         async          = require('async');
 
     _.mixin(require('lodash-uuid'));
 
-    module.exports = class Geograph {
+    class Geograph {
 
         constructor (config) {
             this.db = seraph(config.neo4j);
@@ -906,4 +905,6 @@
 
     }
 
+
+    module.exports = Geograph
 })();
