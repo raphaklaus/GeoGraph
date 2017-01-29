@@ -2,23 +2,23 @@
     'use strict';
 
     const
-        _ = require('lodash'),
-        db = require('seraph')({
+        _              = require('lodash'),
+        db             = require('seraph')({
             user: 'neo4j',
             pass: 'simag'
         }),
         databaseConfig = require('../config/databases'),
-        config = require('../config/config.json'),
-        es = new require('elasticsearch').Client({
+        config         = require('./config.json'),
+        es             = new require('elasticsearch').Client({
             host: databaseConfig.es.host
         }),
-        knex = require('knex')({
+        knex           = require('knex')({
             client: 'pg',
             connection: databaseConfig.pg
         }),
-        wkt = require('terraformer-wkt-parser'),
-        moment = require('moment'),
-        async = require('async');
+        wkt            = require('terraformer-wkt-parser'),
+        moment         = require('moment'),
+        async          = require('async');
 
     _.mixin(require('lodash-uuid'));
 
@@ -31,7 +31,7 @@
 
     function _getObjectsOfDepth(object, depth) {
         var current = 1;
-        var values = {};
+        var values  = {};
 
         function enumerateValues(array) {
 
@@ -119,7 +119,8 @@
     }
 
     function _createNode(node, trx, callback) {
-        async.waterfall([
+
+        let tasks = [
             function (callback) {
 
                 let graphNode = _.chain(node)
@@ -148,33 +149,44 @@
                 }, function (err, queryResult) {
                     callback(err, _.first(queryResult));
                 });
-            },
-            function (result, callback) {
-                var geometries = _.chain(node)
-                                  .keys()
-                                  .filter(function (key) {
-                                      return _isGeoJSON(node[key]);
-                                  })
-                                  .transform(function (accumulator, key) {
-                                      accumulator[key] = node[key];
-                                  }, {})
-                                  .value();
-
-                async.each(_.keys(geometries), function (key, callback) {
-                    knex('geometries')
-                        .insert({
-                            'node_geometry': wkt.convert(geometries[key].geometry),
-                            'node_key': key,
-                            'node_uuid': result.uuid,
-                            'properties': geometries[key].properties
-                        })
-                        .transacting(trx)
-                        .asCallback(callback);
-                }, function (err) {
-                    callback(err, result);
-                });
             }
-        ], function (err, result) {
+        ];
+
+        // no transaction passed, callback is the second parameter
+        if (typeof trx == 'function' && !callback) {
+            callback = trx;
+        } else {
+            // transaction was passed, there are geojsons to be persisted
+            tasks.push(
+                function (result, callback) {
+                    var geometries = _.chain(node)
+                                      .keys()
+                                      .filter(function (key) {
+                                          return _isGeoJSON(node[key]);
+                                      })
+                                      .transform(function (accumulator, key) {
+                                          accumulator[key] = node[key];
+                                      }, {})
+                                      .value();
+
+                    async.each(_.keys(geometries), function (key, callback) {
+                        knex('geometries')
+                            .insert({
+                                'node_geometry': wkt.convert(geometries[key].geometry),
+                                'node_key': key,
+                                'node_uuid': result.uuid,
+                                'properties': geometries[key].properties
+                            })
+                            .transacting(trx)
+                            .asCallback(callback);
+                    }, function (err) {
+                        callback(err, result);
+                    });
+                }
+            )
+        }
+
+        async.waterfall(tasks, function (err, result) {
             callback(err, result);
         })
     }
@@ -294,7 +306,7 @@
         function _createRelationshipsRecursive(node, callback) {
             let
                 relationshipsToCreate = _getRelationshipsToCreate(node),
-                nodesToRelate = _getNodesToRelate(node);
+                nodesToRelate         = _getNodesToRelate(node);
 
             current++;
 
@@ -408,9 +420,9 @@
 
     function _parseQuery(queryObject) {
 
-        let where = _objectToWhere('a', queryObject),
-            limit = queryObject._limit,
-            skip = queryObject._skip,
+        let where     = _objectToWhere('a', queryObject),
+            limit     = queryObject._limit,
+            skip      = queryObject._skip,
             statement = '';
 
         if (queryObject._label) {
@@ -530,7 +542,7 @@
 
                         _.chain(propertiesToNegate)
                          .split(',')
-                         .each((property)=> {
+                         .each((property) => {
                              _deleteProperty(node, property);
                          })
                          .value();
@@ -610,14 +622,14 @@
             (callback) => {
                 async.map(nodes, (node, callback) => {
                     let statement = 'MATCH (n) WHERE n.uuid = {uuid} SET ',
-                        keys = _.chain(node)
-                                .keys()
-                                .reject((key) => {
-                                    return key == 'uuid' ||
-                                        (_.isObject(node[key]) && !_isArrayOfPrimitives(node[key])) ||
-                                        _.startsWith(key, '_');
-                                })
-                                .value();
+                        keys      = _.chain(node)
+                                     .keys()
+                                     .reject((key) => {
+                                         return key == 'uuid' ||
+                                             (_.isObject(node[key]) && !_isArrayOfPrimitives(node[key])) ||
+                                             _.startsWith(key, '_');
+                                     })
+                                     .value();
 
                     _.each(keys, (key) => {
                         statement += `n.${key} = {${key}}, `;
@@ -645,6 +657,7 @@
             },
 
             (dbNodes, callback) => {
+
                 knex.transaction((trx) => {
                     let geometries = _.chain(nodes)
                                       .keys()
@@ -759,34 +772,34 @@
             (callback) => {
                 es.search({
                     index: config.searchIndex,
-                    size : 30,
-                    body : {
+                    size: 30,
+                    body: {
                         "query": {
                             "bool": {
                                 "should": [
                                     {
                                         "query_string": {
-                                            "query" : `*${query._text}*`,
+                                            "query": `*${query._text}*`,
                                             "fields": ["_all"]
                                         }
                                     },
                                     {
                                         "multi_match": {
-                                            "query"               : `${query._text}`,
+                                            "query": `${query._text}`,
                                             "minimum_should_match": "35%",
                                             "fields": ["_all"],
-                                            "operator"            : "or",
-                                            "fuzziness"           : 3
+                                            "operator": "or",
+                                            "fuzziness": 3
                                         }
                                     },
                                     {
                                         "multi_match": {
-                                            "query"               : `${query._text}`,
+                                            "query": `${query._text}`,
                                             "fields": ["_all"],
                                             "minimum_should_match": "35%",
-                                            "operator"            : "or",
-                                            "fuzziness"           : 3,
-                                            "type"                : "phrase"
+                                            "operator": "or",
+                                            "fuzziness": 3,
+                                            "type": "phrase"
                                         }
                                     }
                                 ]
@@ -857,14 +870,14 @@
         });
     }
 
-    exports.createGraph = createGraph;
-    exports.updateGraphs = updateGraphs;
-    exports.getById = getById;
-    exports.getByQuery = getByQuery;
-    exports.getOneByQuery = getOneByQuery;
-    exports.search = search;
-    exports.deleteNodes = deleteNodes;
+    exports.createGraph         = createGraph;
+    exports.updateGraphs        = updateGraphs;
+    exports.getById             = getById;
+    exports.getByQuery          = getByQuery;
+    exports.getOneByQuery       = getOneByQuery;
+    exports.search              = search;
+    exports.deleteNodes         = deleteNodes;
     exports.deleteRelationships = deleteRelationships;
-    exports.rawQuery = rawQuery;
+    exports.rawQuery            = rawQuery;
 
 })(module.exports);
