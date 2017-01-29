@@ -3,6 +3,6 @@
     "server": "http://localhost:7474"
   },
   "elasticSearch": {
-
+    "host": "http//localhost:9200"
   }
 }
