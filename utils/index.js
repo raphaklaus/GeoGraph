@@ -2,8 +2,8 @@
     "use strict";
 
     function intializePostgres(pg, callback) {
-        pg.schema.raw('CREATE EXTENSION postgis');
-        pg.schema.raw('CREATE EXTENSION "uuid-ossp"');
+        pg.schema.raw('CREATE EXTENSION postgis;');
+        pg.schema.raw('CREATE EXTENSION "uuid-ossp;"');
         pg.schema.dropTableIfExists('geometries');
         pg.schema.createTable('geometries', (table) => {
             table.specificType('node_geometry', 'geometry');
