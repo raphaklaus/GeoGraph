@@ -609,26 +609,26 @@
                 function (callback) {
                     if (pg) {
                         pg.transaction(function (trx) {
-                            _createGraph(node, trx, callback);
+                            _createGraph(node, trx, (err, uuid) => {
+                                if (err) {
+                                    trx.rollback();
+                                    callback(err);
+                                } else {
+                                    trx.commit();
+                                    callback(err, uuid);
+                                }
+                            });
                         });
                     } else {
                         _createGraph(node, callback);
                     }
                 },
-                function (uuid, trx, callback) {
-                    trx.commit();
+                function (uuid, callback) {
                     transaction.commit(function (err) {
-                        callback(err, uuid, trx);
+                        callback(err, uuid);
                     });
                 }
-            ], function (err, uuid, trx) {
-                if (err) {
-                    trx.rollback();
-                    callback(err);
-                } else {
-                    callback(null, uuid);
-                }
-            });
+            ], callback);
         }
 
         this.updateGraphs = function (graphs, options = {}, callback) {
