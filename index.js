@@ -185,7 +185,7 @@
                                           .value();
 
                         async.each(_.keys(geometries), function (key, callback) {
-                            knex('geometries')
+                            pg('geometries')
                                 .insert({
                                     'node_geometry': wkt.convert(geometries[key].geometry),
                                     'node_key': key,
@@ -885,7 +885,7 @@
                 pg.transaction((trx) => {
                     async.parallel([
                         (callback) => {
-                            knex('geometries')
+                            pg('geometries')
                                 .whereIn('node_uuid', uuids)
                                 .transacting(trx)
                                 .delete()
