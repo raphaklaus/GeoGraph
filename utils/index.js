@@ -12,7 +12,7 @@
               table.uuid('node_uuid');
               table.json('properties');
 
-              table.unique(['node_key', 'node_uuid']);
+              table.primary(['node_key', 'node_uuid']);
           }).asCallback(callback);
     }
 
