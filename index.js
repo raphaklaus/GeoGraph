@@ -126,7 +126,9 @@
 
             function _createNode(node, trx, callback) {
 
-                let tasks = [
+                let
+                    self = this,
+                    tasks = [
                     function (callback) {
 
                         let graphNode = _.chain(node)
@@ -144,7 +146,7 @@
                         graphNode.createdAt = moment().format('YYYY-MM-DD HH:mm');
                         graphNode.updatedAt = moment().format('YYYY-MM-DD HH:mm');
 
-                        this.db.save(graphNode, node._label, callback);
+                        self.db.save(graphNode, node._label, callback);
                     },
                     function (result, callback) {
                         _executeStatement({
@@ -598,12 +600,13 @@
 
         createGraph(node, callback) {
             let
+                self = this,
                 transaction = this.db.batch();
 
             async.waterfall([
                 function (callback) {
-                    if (this.pg) {
-                        this.pg.transaction(function (trx) {
+                    if (self.pg) {
+                        self.pg.transaction(function (trx) {
                             _createGraph(node, trx, callback);
                         });
                     } else {
@@ -627,7 +630,9 @@
         }
 
         updateGraphs(graphs, options = {}, callback) {
-            let nodes = _.chain(graphs)
+            let
+                self = this,
+                nodes = _.chain(graphs)
                          .map(_graphToArray)
                          .flatten()
                          .filter('uuid')
@@ -637,8 +642,8 @@
             let transaction = this.db.batch(),
                 neo4jTask = (callback) => {
                     async.each(nodes, (node, callback) => {
-                        if (config.postgres) {
-                            this.pg.transaction((trx) => {
+                        if (self.pg) {
+                            self.pg.transaction((trx) => {
                                 options.trx = trx;
                                 _createRelationships(node, options, callback);
                             });
@@ -687,8 +692,8 @@
                 },
 
                 (dbNodes, callback) => {
-                    if (config.postgres) {
-                        this.pg.transaction((trx) => {
+                    if (self.pg) {
+                        self.pg.transaction((trx) => {
                             let geometries = _.chain(nodes)
                                               .keys()
                                               .transform((result, uuid) => {
@@ -707,7 +712,7 @@
                                 (callback) => {
                                     async.each(_.keys(geometries), (uuid, callback) => {
                                         async.each(_.keys(geometries[uuid]), (key, callback) => {
-                                            this.pg.raw(`INSERT INTO geometries (node_uuid, node_key, node_geometry) 
+                                            self.pg.raw(`INSERT INTO geometries (node_uuid, node_key, node_geometry) 
                             values ( :uuid, :key, :geometry) ON CONFLICT  ON CONSTRAINT uuid_key_unique 
                             DO UPDATE SET node_geometry = :geometry`, {
                                                 uuid: uuid,
@@ -752,6 +757,8 @@
         }
 
         getById(uuid, queryObject, callback) {
+            let self = this;
+
             async.waterfall([
                 function (callback) {
                     _executeStatement({
@@ -770,7 +777,7 @@
                                                .map('uuid')
                                                .value())
                         .select('node_uuid', 'node_key', 'properties',
-                            this.pg.raw('ST_AsGeoJSON(node_geometry)::json as node_geometry'))
+                            self.pg.raw('ST_AsGeoJSON(node_geometry)::json as node_geometry'))
                         .asCallback(function (err, geometries) {
                             callback(err, nodes, geometries)
                         });
@@ -793,16 +800,17 @@
         }
 
         getOneByQuery(queryObject, callback) {
-            getByQuery(queryObject, (err, result) => {
+            this.getByQuery(queryObject, (err, result) => {
                 callback(err, _.first(result));
             });
         }
 
         search(query, callback) {
-            if (this.es) {
+            let self = this;
+            if (self.es) {
                 async.waterfall([
                     (callback) => {
-                        this.es.search({
+                        self.es.search({
                             index: config.searchIndex,
                             size: 30,
                             body: {
@@ -841,7 +849,7 @@
                         }, callback);
                     },
                     (result, status, callback) => {
-                        getByQuery({
+                        self.getByQuery({
                             uuid: {
                                 $in: _.map(result.hits.hits, '_id')
                             },
@@ -857,7 +865,9 @@
 
         deleteNodes(uuids, callback) {
 
-            let neo4Task = function (callback) {
+            let
+                self = this,
+                neo4Task = function (callback) {
                 _executeStatement({
                     statement: 'MATCH (n) where n.uuid in {uuids} DETACH DELETE n',
                     parameters: {uuids: uuids}
@@ -865,7 +875,7 @@
             };
 
             if (config.postgres) {
-                this.pg.transaction((trx) => {
+                self.pg.transaction((trx) => {
                     async.parallel([
                         (callback) => {
                             knex('geometries')
