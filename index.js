@@ -370,9 +370,6 @@
                                 }, callback)
                             } else {
                                 current = 0;
-                            }
-
-                            if (current == 0) {
                                 callback();
                             }
                         }
