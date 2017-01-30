@@ -27,576 +27,576 @@
             if (config.elasticsearch) {
                 this.es = new elasticsearch.Client(config.elasticsearch)
             }
+        }
 
-            function _isGeoJSON(object) {
-                return object && object.type == 'Feature' &&
-                    _.isObject(object.geometry) &&
-                    _.isString(object.geometry.type) &&
-                    _.isArray(object.geometry.coordinates);
-            }
+        _isGeoJSON(object) {
+        return object && object.type == 'Feature' &&
+            _.isObject(object.geometry) &&
+            _.isString(object.geometry.type) &&
+            _.isArray(object.geometry.coordinates);
+    }
 
-            function _getObjectsOfDepth(object, depth) {
-                var current = 1;
-                var values  = {};
+        _getObjectsOfDepth(object, depth) {
+        var current = 1;
+        var values  = {};
 
-                function enumerateValues(array) {
+        function enumerateValues(array) {
 
-                    var currentValues = [];
+            var currentValues = [];
 
-                    _.each(array, function (object) {
-                        _.chain(object)
-                         .keys()
-                         .each(function (key) {
-                             let value = object[key];
-                             if (_.isArray(value)) {
-                                 _.each(value, function (valueObject) {
-                                     if (current == depth && !_isGeoJSON(valueObject) && _.isObject(valueObject)) {
-                                         if (!values[key]) {
-                                             values[key] = [];
-                                         }
-                                         values[key].push(valueObject);
-                                     } else {
-                                         currentValues.push(valueObject);
-                                     }
-                                 })
-                             } else if (_.isObject(value)) {
-                                 if (current == depth && !_isGeoJSON(value)) {
-                                     if (!values[key]) {
-                                         values[key] = [];
-                                     }
-                                     values[key].push(value);
-                                 } else {
-                                     currentValues.push(value);
-                                 }
-                             }
-                         })
-                         .value();
-                    });
-
-                    current++;
-
-                    if (currentValues.length) {
-                        enumerateValues(currentValues, current);
-                    }
-
-                }
-
-                enumerateValues([object], current);
-
-                return values;
-            }
-
-            function _isArrayOfPrimitives(array) {
-                return array && !_.isEmpty(array) && _.isArray(array) && _.every(array, (value) => {
-                        return !_.isObject(value) && !_.isUuid(value);
-                    });
-            }
-
-            function _graphToArray(object) {
-                let nodes = [];
-
-                function graphToArrayRecursive(object) {
-
-                    nodes.push(object);
-
-                    _.each(object, (value) => {
-                        if (_.isArray(value)) {
-                            _.each(value, graphToArrayRecursive);
-                        }
-                        else if (_.isObject(value) && !_isGeoJSON(value)) {
-                            graphToArrayRecursive(value);
-                        }
-                    });
-                }
-
-                graphToArrayRecursive(object);
-
-                return _.filter(nodes, (node) => {
-                    return !_.isEmpty(node);
-                });
-            }
-
-            function _getNode(uuid, callback) {
-                this.db.query('MATCH (node) WHERE node.uuid = {uuid} RETURN node', {
-                    uuid: uuid,
-                }, function (err, result) {
-                    callback(err, _.first(result));
-                });
-            }
-
-            function _createNode(node, trx, callback) {
-
-                let
-                    self = this,
-                    tasks = [
-                    function (callback) {
-
-                        let graphNode = _.chain(node)
-                                         .keys()
-                                         .reject(function (key) {
-                                             return _isGeoJSON(node[key])
-                                                 || (_.isArray(node[key]) && !_isArrayOfPrimitives(node[key]))
-                                                 || (_.isObject(node[key]) && !_.isArray(node[key]));
-                                         })
-                                         .transform(function (result, next) {
-                                             result[next] = node[next];
-                                         }, {})
-                                         .value();
-
-                        graphNode.createdAt = moment().format('YYYY-MM-DD HH:mm');
-                        graphNode.updatedAt = moment().format('YYYY-MM-DD HH:mm');
-
-                        self.db.save(graphNode, node._label, callback);
-                    },
-                    function (result, callback) {
-                        _executeStatement({
-                            statement: 'MATCH (n) WHERE id(n) = {id} RETURN n',
-                            parameters: {
-                                id: result.id
-                            }
-                        }, function (err, queryResult) {
-                            callback(err, _.first(queryResult));
-                        });
-                    }
-                ];
-
-                // no transaction passed, callback is the second parameter
-                if (typeof trx == 'function' && !callback) {
-                    callback = trx;
-                } else {
-                    // transaction was passed, there are geojsons to be persisted
-                    tasks.push(
-                        function (result, callback) {
-                            var geometries = _.chain(node)
-                                              .keys()
-                                              .filter(function (key) {
-                                                  return _isGeoJSON(node[key]);
-                                              })
-                                              .transform(function (accumulator, key) {
-                                                  accumulator[key] = node[key];
-                                              }, {})
-                                              .value();
-
-                            async.each(_.keys(geometries), function (key, callback) {
-                                knex('geometries')
-                                    .insert({
-                                        'node_geometry': wkt.convert(geometries[key].geometry),
-                                        'node_key': key,
-                                        'node_uuid': result.uuid,
-                                        'properties': geometries[key].properties
-                                    })
-                                    .transacting(trx)
-                                    .asCallback(callback);
-                            }, function (err) {
-                                callback(err, result);
-                            });
-                        }
-                    )
-                }
-
-                async.waterfall(tasks, function (err, result) {
-                    callback(err, result);
-                })
-            }
-
-            function _getOrCreateNode(node, trx, callback) {
-
-                if (_.isObject(node)) {
-                    if (node.hasOwnProperty('uuid')) {
-                        if (node.uuid) {
-                            // se for um objeto com a propriedade "uuid" e essa propriedade tiver algum valor, obter esse objeto
-                            _getNode(node.uuid, callback)
-                        } else {
-                            callback(null, {})
-                        }
-                    } else {
-                        // se for um objeto sem a propriedade "uuid", persistir no banco
-                        _createNode(node, trx, callback);
-                    }
-                } else if (_.isUuid(node)) {
-                    // se for passado direto um "uuid", procurar este objeto no banco
-                    _getNode(node, callback);
-                } else {
-                    callback(null, {});
-                }
-            }
-
-            function _relateNodes(primaryNodeUuid, relationships, options) {
-                let statements = [];
-                _.chain(relationships)
+            _.each(array, function (object) {
+                _.chain(object)
                  .keys()
                  .each(function (key) {
-                     if (options && options.detach) {
-                         statements.push({
-                             statement: `MATCH (a)-[r:${key}]->(b)
+                     let value = object[key];
+                     if (_.isArray(value)) {
+                         _.each(value, function (valueObject) {
+                             if (current == depth && !_isGeoJSON(valueObject) && _.isObject(valueObject)) {
+                                 if (!values[key]) {
+                                     values[key] = [];
+                                 }
+                                 values[key].push(valueObject);
+                             } else {
+                                 currentValues.push(valueObject);
+                             }
+                         })
+                     } else if (_.isObject(value)) {
+                         if (current == depth && !_isGeoJSON(value)) {
+                             if (!values[key]) {
+                                 values[key] = [];
+                             }
+                             values[key].push(value);
+                         } else {
+                             currentValues.push(value);
+                         }
+                     }
+                 })
+                 .value();
+            });
+
+            current++;
+
+            if (currentValues.length) {
+                enumerateValues(currentValues, current);
+            }
+
+        }
+
+        enumerateValues([object], current);
+
+        return values;
+    }
+
+        _isArrayOfPrimitives(array) {
+        return array && !_.isEmpty(array) && _.isArray(array) && _.every(array, (value) => {
+                return !_.isObject(value) && !_.isUuid(value);
+            });
+    }
+
+        _graphToArray(object) {
+        let nodes = [];
+
+        function graphToArrayRecursive(object) {
+
+            nodes.push(object);
+
+            _.each(object, (value) => {
+                if (_.isArray(value)) {
+                    _.each(value, graphToArrayRecursive);
+                }
+                else if (_.isObject(value) && !_isGeoJSON(value)) {
+                    graphToArrayRecursive(value);
+                }
+            });
+        }
+
+        graphToArrayRecursive(object);
+
+        return _.filter(nodes, (node) => {
+            return !_.isEmpty(node);
+        });
+    }
+
+        _getNode(uuid, callback) {
+        this.db.query('MATCH (node) WHERE node.uuid = {uuid} RETURN node', {
+            uuid: uuid,
+        }, function (err, result) {
+            callback(err, _.first(result));
+        });
+    }
+
+        _createNode(node, trx, callback) {
+
+        let
+            self = this,
+            tasks = [
+                function (callback) {
+
+                    let graphNode = _.chain(node)
+                                     .keys()
+                                     .reject(function (key) {
+                                         return _isGeoJSON(node[key])
+                                             || (_.isArray(node[key]) && !_isArrayOfPrimitives(node[key]))
+                                             || (_.isObject(node[key]) && !_.isArray(node[key]));
+                                     })
+                                     .transform(function (result, next) {
+                                         result[next] = node[next];
+                                     }, {})
+                                     .value();
+
+                    graphNode.createdAt = moment().format('YYYY-MM-DD HH:mm');
+                    graphNode.updatedAt = moment().format('YYYY-MM-DD HH:mm');
+
+                    self.db.save(graphNode, node._label, callback);
+                },
+                function (result, callback) {
+                    _executeStatement({
+                        statement: 'MATCH (n) WHERE id(n) = {id} RETURN n',
+                        parameters: {
+                            id: result.id
+                        }
+                    }, function (err, queryResult) {
+                        callback(err, _.first(queryResult));
+                    });
+                }
+            ];
+
+        // no transaction passed, callback is the second parameter
+        if (typeof trx == 'function' && !callback) {
+            callback = trx;
+        } else {
+            // transaction was passed, there are geojsons to be persisted
+            tasks.push(
+                function (result, callback) {
+                    var geometries = _.chain(node)
+                                      .keys()
+                                      .filter(function (key) {
+                                          return _isGeoJSON(node[key]);
+                                      })
+                                      .transform(function (accumulator, key) {
+                                          accumulator[key] = node[key];
+                                      }, {})
+                                      .value();
+
+                    async.each(_.keys(geometries), function (key, callback) {
+                        knex('geometries')
+                            .insert({
+                                'node_geometry': wkt.convert(geometries[key].geometry),
+                                'node_key': key,
+                                'node_uuid': result.uuid,
+                                'properties': geometries[key].properties
+                            })
+                            .transacting(trx)
+                            .asCallback(callback);
+                    }, function (err) {
+                        callback(err, result);
+                    });
+                }
+            )
+        }
+
+        async.waterfall(tasks, function (err, result) {
+            callback(err, result);
+        })
+    }
+
+        _getOrCreateNode(node, trx, callback) {
+
+        if (_.isObject(node)) {
+            if (node.hasOwnProperty('uuid')) {
+                if (node.uuid) {
+                    // se for um objeto com a propriedade "uuid" e essa propriedade tiver algum valor, obter esse objeto
+                    _getNode(node.uuid, callback)
+                } else {
+                    callback(null, {})
+                }
+            } else {
+                // se for um objeto sem a propriedade "uuid", persistir no banco
+                _createNode(node, trx, callback);
+            }
+        } else if (_.isUuid(node)) {
+            // se for passado direto um "uuid", procurar este objeto no banco
+            _getNode(node, callback);
+        } else {
+            callback(null, {});
+        }
+    }
+
+        _relateNodes(primaryNodeUuid, relationships, options) {
+        let statements = [];
+        _.chain(relationships)
+         .keys()
+         .each(function (key) {
+             if (options && options.detach) {
+                 statements.push({
+                     statement: `MATCH (a)-[r:${key}]->(b)
                                  WHERE a.uuid = {nodeUuid}
                                  DELETE r`,
-                             parameters: {
-                                 nodeUuid: primaryNodeUuid
-                             }
-                         });
+                     parameters: {
+                         nodeUuid: primaryNodeUuid
                      }
-                     _.each(relationships[key], function (uuid) {
+                 });
+             }
+             _.each(relationships[key], function (uuid) {
 
-                         if (uuid) {
-                             statements.push({
-                                 statement: `MATCH (a),(b)
+                 if (uuid) {
+                     statements.push({
+                         statement: `MATCH (a),(b)
                                  WHERE a.uuid = {nodeUuid} AND b.uuid = {relationshipUuid}
                                  CREATE UNIQUE(a)-[r:${key}]->(b)
                                  RETURN id(r)`,
-                                 parameters: {
-                                     nodeUuid: primaryNodeUuid,
-                                     relationshipUuid: uuid
-                                 }
-                             });
+                         parameters: {
+                             nodeUuid: primaryNodeUuid,
+                             relationshipUuid: uuid
                          }
                      });
-                 })
-                 .value();
+                 }
+             });
+         })
+         .value();
 
-                return statements;
-            }
+        return statements;
+    }
 
-            function _executeStatement(query, callback) {
-                // Executa a query no neo4j
-                this.db.query(query.statement, query.parameters, callback);
-            }
+        _executeStatement(query, callback) {
+        // Executa a query no neo4j
+        this.db.query(query.statement, query.parameters, callback);
+    }
 
-            function _getRelationshipsToCreate(node) {
-                return _.chain(node)
-                        .keys()
-                        .filter(function (key) {
-                            return _.isObject(node[key]) && !_isGeoJSON(node[key]) && !_isArrayOfPrimitives(node[key]);
-                        })
-                        .transform(function (result, key) {
+        _getRelationshipsToCreate(node) {
+        return _.chain(node)
+                .keys()
+                .filter(function (key) {
+                    return _.isObject(node[key]) && !_isGeoJSON(node[key]) && !_isArrayOfPrimitives(node[key]);
+                })
+                .transform(function (result, key) {
 
-                            let value = node[key];
+                    let value = node[key];
 
-                            if (_.isArray(value)) {
-                                result[key] = _.filter(value, function (node) {
-                                    return _.isObject(node) && !node.uuid && !_isGeoJSON(value);
-                                });
-                            } else {
-                                result[key] = !value.uuid ? [value] : [];
-                            }
-                        }, {})
-                        .value();
-            }
-
-            function _getNodesToRelate(node) {
-                return _.chain(node)
-                        .keys()
-                        .filter(function (key) {
-                            return node[key] && (!_isGeoJSON(node[key]) && !_isArrayOfPrimitives(node[key])) && key != 'uuid';
-                        })
-                        .transform(function (result, key) {
-                            let value = node[key];
-
-                            if (!_.isArray(value)) {
-                                result[key] = _.filter([value && value.uuid]);
-                            } else {
-                                result[key] = _.chain(value)
-                                               .map(function (value) {
-                                                   return value && value.uuid;
-                                               })
-                                               .filter()
-                                               .value();
-                            }
-                        }, {})
-                        .value()
-            }
-
-            function _createRelationships(node, options, callback) {
-                var
-                    error,
-                    current = 0;
-
-                function _createRelationshipsRecursive(node, callback) {
-                    let
-                        relationshipsToCreate = _getRelationshipsToCreate(node),
-                        nodesToRelate         = _getNodesToRelate(node);
-
-                    current++;
-
-                    if (!error) {
-                        async.series([
-                            function (callback) {
-                                async.map(_.keys(relationshipsToCreate), function (key, callback) {
-                                    async.map(relationshipsToCreate[key], function (node, callback) {
-                                        _getOrCreateNode(node, options.trx,
-                                            function (err, result) {
-                                                if (err) {
-                                                    callback(err);
-                                                } else {
-                                                    node.uuid = result.uuid;
-
-                                                    nodesToRelate[key].push(result.uuid);
-                                                    callback(err, result);
-                                                }
-                                            });
-                                    }, callback);
-                                }, callback);
-                            },
-                            function (callback) {
-                                if (options && options.detach) {
-                                    async.eachSeries(_relateNodes(node.uuid, nodesToRelate, options), function (item, callback) {
-                                        _executeStatement(item, callback);
-                                    }, callback);
-                                } else {
-                                    async.each(_relateNodes(node.uuid, nodesToRelate, options), function (item, callback) {
-                                        _executeStatement(item, callback);
-                                    }, callback);
-                                }
-                            }
-                        ], function (err) {
-                            if (err) {
-                                error = err;
-                                callback(error);
-                            } else {
-                                var relatedNodes = _getObjectsOfDepth(node, 1);
-
-                                if (_.keys(relatedNodes).length) {
-
-                                    let keys = _.keys(relatedNodes);
-
-                                    async.each(keys, (key, callback) => {
-                                        async.each(relatedNodes[key], function (relatedNode, callback) {
-                                            _createRelationshipsRecursive(relatedNode, callback);
-                                        }, callback);
-                                    }, callback)
-                                } else {
-                                    current = 0;
-                                }
-
-                                if (current == 0) {
-                                    callback();
-                                }
-                            }
+                    if (_.isArray(value)) {
+                        result[key] = _.filter(value, function (node) {
+                            return _.isObject(node) && !node.uuid && !_isGeoJSON(value);
                         });
                     } else {
-                        callback(error);
+                        result[key] = !value.uuid ? [value] : [];
                     }
-                }
+                }, {})
+                .value();
+    }
 
-                _createRelationshipsRecursive(node, callback);
-            }
+        _getNodesToRelate(node) {
+        return _.chain(node)
+                .keys()
+                .filter(function (key) {
+                    return node[key] && (!_isGeoJSON(node[key]) && !_isArrayOfPrimitives(node[key])) && key != 'uuid';
+                })
+                .transform(function (result, key) {
+                    let value = node[key];
 
-            function _createGraph(node, trx, callback) {
+                    if (!_.isArray(value)) {
+                        result[key] = _.filter([value && value.uuid]);
+                    } else {
+                        result[key] = _.chain(value)
+                                       .map(function (value) {
+                                           return value && value.uuid;
+                                       })
+                                       .filter()
+                                       .value();
+                    }
+                }, {})
+                .value()
+    }
 
-                if (typeof trx == 'function' && !callback) {
-                    callback = trx;
-                }
+        _createRelationships(node, options, callback) {
+        var
+            error,
+            current = 0;
 
-                async.waterfall([
+        function _createRelationshipsRecursive(node, callback) {
+            let
+                relationshipsToCreate = _getRelationshipsToCreate(node),
+                nodesToRelate         = _getNodesToRelate(node);
+
+            current++;
+
+            if (!error) {
+                async.series([
                     function (callback) {
-                        _getOrCreateNode(node, trx, callback)
-                    },
-                    function (result, callback) {
+                        async.map(_.keys(relationshipsToCreate), function (key, callback) {
+                            async.map(relationshipsToCreate[key], function (node, callback) {
+                                _getOrCreateNode(node, options.trx,
+                                    function (err, result) {
+                                        if (err) {
+                                            callback(err);
+                                        } else {
+                                            node.uuid = result.uuid;
 
-                        node.uuid = result.uuid;
-                        _createRelationships(node, {
-                            trx: trx
-                        }, function (err) {
-                            callback(err, result.uuid, trx);
-                        });
+                                            nodesToRelate[key].push(result.uuid);
+                                            callback(err, result);
+                                        }
+                                    });
+                            }, callback);
+                        }, callback);
                     },
-                ], function (err, uuid) {
-                    callback(err, uuid, trx);
+                    function (callback) {
+                        if (options && options.detach) {
+                            async.eachSeries(_relateNodes(node.uuid, nodesToRelate, options), function (item, callback) {
+                                _executeStatement(item, callback);
+                            }, callback);
+                        } else {
+                            async.each(_relateNodes(node.uuid, nodesToRelate, options), function (item, callback) {
+                                _executeStatement(item, callback);
+                            }, callback);
+                        }
+                    }
+                ], function (err) {
+                    if (err) {
+                        error = err;
+                        callback(error);
+                    } else {
+                        var relatedNodes = _getObjectsOfDepth(node, 1);
+
+                        if (_.keys(relatedNodes).length) {
+
+                            let keys = _.keys(relatedNodes);
+
+                            async.each(keys, (key, callback) => {
+                                async.each(relatedNodes[key], function (relatedNode, callback) {
+                                    _createRelationshipsRecursive(relatedNode, callback);
+                                }, callback);
+                            }, callback)
+                        } else {
+                            current = 0;
+                        }
+
+                        if (current == 0) {
+                            callback();
+                        }
+                    }
                 });
+            } else {
+                callback(error);
             }
+        }
 
-            function _objectToWhere(node, queryObject) {
-                return _.chain(queryObject)
-                        .keys()
-                        .reject((key) => {
-                            return _.startsWith(key, '_')
-                        })
-                        .map((key) => {
-                            if (_.isObject(queryObject[key]) && queryObject[key]['$in']) {
-                                let elements = _.chain(queryObject[key]['$in'])
-                                                .map((element) => {
-                                                    if (typeof element == 'string') {
-                                                        return `'${element}'`;
-                                                    } else {
-                                                        return element;
-                                                    }
-                                                })
-                                                .join(',')
-                                                .value();
+        _createRelationshipsRecursive(node, callback);
+    }
 
-                                return `${node}.${key} in [${elements}]`
-                            } else {
-                                return `${node}.${key} = {${key}}`
-                            }
-                        })
-                        .value()
-                        .join(' AND ');
-            }
+        _createGraph(node, trx, callback) {
 
-            function _parseQuery(queryObject) {
+        if (typeof trx == 'function' && !callback) {
+            callback = trx;
+        }
 
-                let where     = _objectToWhere('a', queryObject),
-                    limit     = queryObject._limit,
-                    skip      = queryObject._skip,
-                    statement = '';
+        async.waterfall([
+            function (callback) {
+                _getOrCreateNode(node, trx, callback)
+            },
+            function (result, callback) {
 
-                if (queryObject._label) {
-                    statement = `MATCH (a:${queryObject._label}) `
-                } else {
-                    statement = 'MATCH (a) '
-                }
+                node.uuid = result.uuid;
+                _createRelationships(node, {
+                    trx: trx
+                }, function (err) {
+                    callback(err, result.uuid, trx);
+                });
+            },
+        ], function (err, uuid) {
+            callback(err, uuid, trx);
+        });
+    }
 
-                if (where) {
-                    statement += `where ${where} `;
-                }
+        _objectToWhere(node, queryObject) {
+        return _.chain(queryObject)
+                .keys()
+                .reject((key) => {
+                    return _.startsWith(key, '_')
+                })
+                .map((key) => {
+                    if (_.isObject(queryObject[key]) && queryObject[key]['$in']) {
+                        let elements = _.chain(queryObject[key]['$in'])
+                                        .map((element) => {
+                                            if (typeof element == 'string') {
+                                                return `'${element}'`;
+                                            } else {
+                                                return element;
+                                            }
+                                        })
+                                        .join(',')
+                                        .value();
 
-                statement += 'WITH a '
+                        return `${node}.${key} in [${elements}]`
+                    } else {
+                        return `${node}.${key} = {${key}}`
+                    }
+                })
+                .value()
+                .join(' AND ');
+    }
 
-                if (limit) {
-                    statement += `LIMIT ${limit} `;
-                }
+        _parseQuery(queryObject) {
 
-                if (skip) {
-                    statement += `SKIP ${skip} `;
-                }
+        let where     = _objectToWhere('a', queryObject),
+            limit     = queryObject._limit,
+            skip      = queryObject._skip,
+            statement = '';
 
-                statement += 'MATCH (a)-[r*0..]->(b) RETURN a,r,b'
+        if (queryObject._label) {
+            statement = `MATCH (a:${queryObject._label}) `
+        } else {
+            statement = 'MATCH (a) '
+        }
 
-                return {
-                    statement: statement,
-                    parameters: queryObject
-                };
-            }
+        if (where) {
+            statement += `where ${where} `;
+        }
 
-            function _deleteProperty(object, property) {
-                let currentObject = object;
+        statement += 'WITH a '
 
-                _.chain(property)
-                 .split('.')
-                 .each((key) => {
-                     if (_.isObject(currentObject[key]) && !_.isArray(currentObject[key])) {
-                         currentObject = currentObject[key];
+        if (limit) {
+            statement += `LIMIT ${limit} `;
+        }
+
+        if (skip) {
+            statement += `SKIP ${skip} `;
+        }
+
+        statement += 'MATCH (a)-[r*0..]->(b) RETURN a,r,b'
+
+        return {
+            statement: statement,
+            parameters: queryObject
+        };
+    }
+
+        _deleteProperty(object, property) {
+        let currentObject = object;
+
+        _.chain(property)
+         .split('.')
+         .each((key) => {
+             if (_.isObject(currentObject[key]) && !_.isArray(currentObject[key])) {
+                 currentObject = currentObject[key];
+             }
+         })
+         .value();
+
+        delete currentObject[_.chain(property)
+                              .split('.')
+                              .last()
+                              .value()];
+    }
+
+        _parseResult(nodes, geometries, queryObject) {
+
+        _.each(nodes, function (item) {
+            if (item._type == 'node') {
+                var relationships = _.chain(nodes)
+                                     .filter({
+                                         start: item.id,
+                                         '_type': 'relationship'
+                                     })
+                                     .groupBy('type')
+                                     .value();
+
+                _.chain(relationships)
+                 .keys()
+                 .each((relationshipName) => {
+                     item[relationshipName] = _.chain(relationships[relationshipName])
+                                               .map((r) => {
+                                                   return _.find(nodes, {id: r.end, '_type': 'node'});
+                                               })
+                                               .uniqBy('id')
+                                               .filter()
+                                               .value();
+
+                     if (item[relationshipName].length == 1 && !item[relationshipName][0]._array) {
+                         item[relationshipName] = item[relationshipName][0]
                      }
                  })
                  .value();
 
-                delete currentObject[_.chain(property)
-                                      .split('.')
-                                      .last()
-                                      .value()];
+                var nodeGeometries = _.chain(geometries)
+                                      .filter({node_uuid: item.uuid})
+                                      .transform(function (result, next) {
+                                          result[next.node_key] = {
+                                              type: 'Feature',
+                                              geometry: next.node_geometry,
+                                              properties: next.properties
+                                          }
+                                      }, {})
+                                      .value();
+
+                _.chain(nodeGeometries)
+                 .keys()
+                 .each(function (key) {
+                     item[key] = nodeGeometries[key]
+                 })
+                 .value();
             }
+        });
 
-            function _parseResult(nodes, geometries, queryObject) {
+        _.each(nodes, (item) => {
+            _.chain(item)
+             .keys()
+             .each((key) => {
+                 if (_.startsWith(key, '_') && key != '_root' && key != '_label') {
+                     delete item[key];
+                 }
+             })
+             .value();
 
-                _.each(nodes, function (item) {
-                    if (item._type == 'node') {
-                        var relationships = _.chain(nodes)
-                                             .filter({
-                                                 start: item.id,
-                                                 '_type': 'relationship'
-                                             })
-                                             .groupBy('type')
-                                             .value();
+            delete item.id;
+        });
 
-                        _.chain(relationships)
-                         .keys()
-                         .each((relationshipName) => {
-                             item[relationshipName] = _.chain(relationships[relationshipName])
-                                                       .map((r) => {
-                                                           return _.find(nodes, {id: r.end, '_type': 'node'});
-                                                       })
-                                                       .uniqBy('id')
-                                                       .filter()
-                                                       .value();
+        return _.chain(nodes)
+                .filter('_root')
+                .map((node) => {
 
-                             if (item[relationshipName].length == 1 && !item[relationshipName][0]._array) {
-                                 item[relationshipName] = item[relationshipName][0]
-                             }
-                         })
-                         .value();
+                    if (queryObject) {
+                        let propertiesToNegate = queryObject._negate;
 
-                        var nodeGeometries = _.chain(geometries)
-                                              .filter({node_uuid: item.uuid})
-                                              .transform(function (result, next) {
-                                                  result[next.node_key] = {
-                                                      type: 'Feature',
-                                                      geometry: next.node_geometry,
-                                                      properties: next.properties
-                                                  }
-                                              }, {})
-                                              .value();
-
-                        _.chain(nodeGeometries)
-                         .keys()
-                         .each(function (key) {
-                             item[key] = nodeGeometries[key]
+                        _.chain(propertiesToNegate)
+                         .split(',')
+                         .each((property) => {
+                             _deleteProperty(node, property);
                          })
                          .value();
                     }
-                });
 
-                _.each(nodes, (item) => {
-                    _.chain(item)
-                     .keys()
-                     .each((key) => {
-                         if (_.startsWith(key, '_') && key != '_root' && key != '_label') {
-                             delete item[key];
-                         }
-                     })
-                     .value();
+                    delete node._root;
+                    return node;
+                })
+                .uniqBy('uuid')
+                .value();
+    }
 
-                    delete item.id;
-                });
+        _flattenResult(result) {
 
-                return _.chain(nodes)
-                        .filter('_root')
-                        .map((node) => {
+        return _.chain(result)
+                .transform(function (accumulator, next) {
+                    if (next.a) {
+                        next.a._root = true;
+                    }
 
-                            if (queryObject) {
-                                let propertiesToNegate = queryObject._negate;
+                    if (_.isArray(next.r)) {
+                        _.each(next.r, (item) => {
+                            accumulator.push(item);
+                        });
+                    } else {
+                        accumulator.push(next.r);
+                    }
 
-                                _.chain(propertiesToNegate)
-                                 .split(',')
-                                 .each((property) => {
-                                     _deleteProperty(node, property);
-                                 })
-                                 .value();
-                            }
-
-                            delete node._root;
-                            return node;
-                        })
-                        .uniqBy('uuid')
-                        .value();
-            }
-
-            function _flattenResult(result) {
-
-                return _.chain(result)
-                        .transform(function (accumulator, next) {
-                            if (next.a) {
-                                next.a._root = true;
-                            }
-
-                            if (_.isArray(next.r)) {
-                                _.each(next.r, (item) => {
-                                    accumulator.push(item);
-                                });
-                            } else {
-                                accumulator.push(next.r);
-                            }
-
-                            accumulator.push(next.a);
-                            accumulator.push(next.b);
-                        })
-                        .filter()
-                        .flatten()
-                        .uniqBy((item) => {
-                            return item._type + item.id;
-                        })
-                        .value()
-            }
-        }
+                    accumulator.push(next.a);
+                    accumulator.push(next.b);
+                })
+                .filter()
+                .flatten()
+                .uniqBy((item) => {
+                    return item._type + item.id;
+                })
+                .value()
+    }
 
         createGraph(node, callback) {
             let
