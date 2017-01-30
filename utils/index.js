@@ -1,7 +1,7 @@
 (function (exports) {
     "use strict";
 
-    function intializePostgres(pg) {
+    function intializePostgres(pg, callback) {
         pg.schema.raw('CREATE EXTENSION postgis');
         pg.schema.raw('CREATE EXTENSION "uuid-ossp"');
         pg.schema.dropTableIfExists('geometries');
@@ -12,7 +12,7 @@
             table.json('properties');
 
             table.unique(['node_key', 'node_uuid']);
-        });
+        }).asCallback(callback);
     }
 
     exports.intializePostgres = intializePostgres;
