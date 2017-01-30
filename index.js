@@ -19,7 +19,6 @@
             pg,
             es;
 
-
         db = seraph(config.neo4j);
 
         if (config.postgres) {
@@ -32,6 +31,10 @@
         if (config.elasticsearch) {
             es = new elasticsearch.Client(config.elasticsearch)
         }
+
+        this.pg = pg;
+        this.db = db;
+        this.es = es;
 
         function _isGeoJSON(object) {
             return object && object.type == 'Feature' &&
