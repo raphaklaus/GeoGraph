@@ -122,7 +122,7 @@
         }
 
         function _getNode(uuid, callback) {
-            this.db.query('MATCH (node) WHERE node.uuid = {uuid} RETURN node', {
+            db.query('MATCH (node) WHERE node.uuid = {uuid} RETURN node', {
                 uuid: uuid,
             }, function (err, result) {
                 callback(err, _.first(result));
@@ -264,7 +264,7 @@
 
         function _executeStatement(query, callback) {
             // Executa a query no neo4j
-            this.db.query(query.statement, query.parameters, callback);
+            db.query(query.statement, query.parameters, callback);
         }
 
         function _getRelationshipsToCreate(node) {
@@ -605,7 +605,7 @@
         this.createGraph = function (node, callback) {
             let
                 self = this,
-                transaction = this.db.batch();
+                transaction = db.batch();
 
             async.waterfall([
                 function (callback) {
@@ -643,7 +643,7 @@
                          .keyBy('uuid')
                          .value();
 
-            let transaction = this.db.batch(),
+            let transaction = db.batch(),
                 neo4jTask = (callback) => {
                     async.each(nodes, (node, callback) => {
                         if (self.pg) {
