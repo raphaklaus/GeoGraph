@@ -380,6 +380,11 @@
             }
 
             function _createGraph(node, trx, callback) {
+
+                if (typeof trx == 'function' && !callback) {
+                    callback = trx;
+                }
+
                 async.waterfall([
                     function (callback) {
                         _getOrCreateNode(node, trx, callback)
@@ -597,9 +602,13 @@
 
             async.waterfall([
                 function (callback) {
-                    this.pg.transaction(function (trx) {
-                        _createGraph(node, trx, callback);
-                    });
+                    if (this.pg) {
+                        this.pg.transaction(function (trx) {
+                            _createGraph(node, trx, callback);
+                        });
+                    } else {
+                        _createGraph(node, callback);
+                    }
                 },
                 function (uuid, trx, callback) {
                     trx.commit();
