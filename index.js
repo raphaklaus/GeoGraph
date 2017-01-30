@@ -150,7 +150,7 @@
                         graphNode.createdAt = moment().format('YYYY-MM-DD HH:mm');
                         graphNode.updatedAt = moment().format('YYYY-MM-DD HH:mm');
 
-                        db.save(graphNode, node._label, callback);
+                        db.save(graphNode, node._label || '', callback);
                     },
                     function (result, callback) {
                         _executeStatement({
@@ -405,7 +405,7 @@
                     });
                 },
             ], function (err, uuid) {
-                callback(err, uuid, trx);
+                callback(err, uuid);
             });
         }
 
@@ -612,11 +612,10 @@
                             _createGraph(node, trx, (err, uuid) => {
                                 if (err) {
                                     trx.rollback();
-                                    callback(err);
                                 } else {
                                     trx.commit();
-                                    callback(err, uuid);
                                 }
+                                callback(err, uuid);
                             });
                         });
                     } else {
@@ -758,6 +757,11 @@
         }
 
         this.getById = function (uuid, queryObject, callback) {
+
+            if (typeof queryObject == 'function' && !callback) {
+                callback = queryObject
+            }
+
             async.waterfall([
                 function (callback) {
                     _executeStatement({
@@ -770,16 +774,20 @@
                     });
                 },
                 function (nodes, callback) {
-                    knex('geometries')
-                        .whereIn('node_uuid', _.chain(nodes)
-                                               .filter({'_type': 'node'})
-                                               .map('uuid')
-                                               .value())
-                        .select('node_uuid', 'node_key', 'properties',
-                            pg.raw('ST_AsGeoJSON(node_geometry)::json as node_geometry'))
-                        .asCallback(function (err, geometries) {
-                            callback(err, nodes, geometries)
-                        });
+                    if (pg) {
+                        pg('geometries')
+                            .whereIn('node_uuid', _.chain(nodes)
+                                                   .filter({'_type': 'node'})
+                                                   .map('uuid')
+                                                   .value())
+                            .select('node_uuid', 'node_key', 'properties',
+                                pg.raw('ST_AsGeoJSON(node_geometry)::json as node_geometry'))
+                            .asCallback(function (err, geometries) {
+                                callback(err, nodes, geometries)
+                            })
+                    } else {
+                        callback(null, nodes);
+                    }
                 }
             ], function (err, nodes, geometries) {
                 if (err) {
