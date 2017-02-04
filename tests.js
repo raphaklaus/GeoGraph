@@ -27,28 +27,28 @@ const
 //    console.log(items)
 //})
 
-//geograph.createGraph({
-//    name: 'Diego',
-//    friends: [{
-//        name: 'rafael'
-//    },{
-//        name: 'gabriel',
-//        friends: {
-//            name: 'anderson',
-//            _array:true,
-//            address: {
-//                state: 'rj',
-//                city: 'rio de janeiro'
-//            }
-//        }
-//    }, {
-//        name: 'amanda'
-//    }]
-//}, (err, uuid) => {
-//    console.log(err, uuid);
-//})
-
-geograph.getById('3cfd16b4-2a04-4359-86e4-3b073901fddd', (err, result) => {
-    'use strict';
-    console.log(err, result.friends[1].friends[0])
+geograph.createGraph({
+    name: 'Diego',
+    friends: [{
+        name: 'rafael'
+    },{
+        name: 'gabriel',
+        friends: {
+            name: 'anderson',
+            _array:true,
+            address: {
+                state: 'rj',
+                city: 'rio de janeiro'
+            }
+        }
+    }, {
+        name: 'amanda'
+    }]
+}, (err, uuid) => {
+    console.log(err, uuid);
 })
+
+//geograph.getById('3cfd16b4-2a04-4359-86e4-3b073901fddd', (err, result) => {
+//    'use strict';
+//    console.log(err, result.friends[1].friends[0])
+//})
