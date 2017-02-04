@@ -23,8 +23,11 @@
     "lodash": "^4.17.4",
     "lodash-uuid": "0.0.3",
     "moment": "^2.17.1",
+    "neo4j-driver": "^1.1.0",
     "pg": "^6.1.2",
     "seraph": "git+https://github.com/dodiego/seraph.git",
-    "terraformer-wkt-parser": "^1.1.2"
+    "terraformer-wkt-parser": "^1.1.2",
+    "then-nodeify": "^1.0.1",
+    "uuid": "^3.0.1"
   }
 }

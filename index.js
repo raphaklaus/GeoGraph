@@ -2,13 +2,13 @@
     'use strict';
 
     const
-        _              = require('lodash'),
-        knex           = require('knex'),
-        seraph         = require('seraph'),
-        elasticsearch  = require('elasticsearch'),
-        wkt            = require('terraformer-wkt-parser'),
-        moment         = require('moment'),
-        async          = require('async');
+        _             = require('lodash'),
+        knex          = require('knex'),
+        elasticsearch = require('elasticsearch'),
+        neo4jManager  = require('./neo4j_manager'),
+        wkt           = require('terraformer-wkt-parser'),
+        moment        = require('moment'),
+        async         = require('async');
 
     _.mixin(require('lodash-uuid'));
 
@@ -19,12 +19,14 @@
             pg,
             es;
 
-        db = seraph(config.neo4j);
+        db = new neo4jManager({
+            host: 'localhost'
+        });
 
-        if (config.postgres) {
+        if (config.pg) {
             pg = knex({
                 client: 'pg',
-                connection: config.postgres
+                connection: config.pg
             });
         }
 
@@ -124,7 +126,7 @@
             });
         }
 
-        function _getNode(uuid, callback) {
+        function _getNode(uuid, transactions, callback) {
             db.query('MATCH (node) WHERE node.uuid = {uuid} RETURN node', {
                 uuid: uuid,
             }, function (err, result) {
@@ -132,97 +134,66 @@
             });
         }
 
-        function _createNode(node, trx, callback) {
+        function _createNode(node, transactions, callback) {
 
             let
-                tasks = [
-                    function (callback) {
-
-                        let graphNode = _.chain(node)
-                                         .keys()
-                                         .reject(function (key) {
-                                             return _isGeoJSON(node[key])
-                                                 || (_.isArray(node[key]) && !_isArrayOfPrimitives(node[key]))
-                                                 || (_.isObject(node[key]) && !_.isArray(node[key]));
-                                         })
-                                         .transform(function (result, next) {
-                                             result[next] = node[next];
-                                         }, {})
-                                         .value();
-
-                        graphNode.createdAt = moment().format('YYYY-MM-DD HH:mm');
-                        graphNode.updatedAt = moment().format('YYYY-MM-DD HH:mm');
-
-                        db.save(graphNode, node._label || '', callback);
-                    },
-                    function (result, callback) {
-                        _executeStatement({
-                            statement: 'MATCH (n) WHERE id(n) = {id} RETURN n',
-                            parameters: {
-                                id: result.id
-                            }
-                        }, function (err, queryResult) {
-                            callback(err, _.first(queryResult));
-                        });
-                    }
-                ];
+                graphNode = _.chain(node)
+                             .keys()
+                             .reject(function (key) {
+                                 return _isGeoJSON(node[key])
+                                     || (_.isArray(node[key]) && !_isArrayOfPrimitives(node[key]))
+                                     || (_.isObject(node[key]) && !_.isArray(node[key]));
+                             })
+                             .transform(function (result, next) {
+                                 result[next] = node[next];
+                             }, {})
+                             .value(),
+                tasks     = {
+                    neo4j: async.apply(db.createNode, graphNode, node._label, transactions.trx)
+                };
 
             // no transaction passed, callback is the second parameter
-            if (typeof trx == 'function' && !callback) {
-                callback = trx;
-            } else {
-                // transaction was passed, there are geojsons to be persisted
-                tasks.push(
-                    function (result, callback) {
-                        var geometries = _.chain(node)
-                                          .keys()
-                                          .filter(function (key) {
-                                              return _isGeoJSON(node[key]);
-                                          })
-                                          .transform(function (accumulator, key) {
-                                              accumulator[key] = node[key];
-                                          }, {})
-                                          .value();
+            if (transactions.pgTrx) {
+                tasks.pg = (callback) => {
+                    let geometries = _.chain(node)
+                                      .keys()
+                                      .filter(function (key) {
+                                          return _isGeoJSON(node[key]);
+                                      })
+                                      .transform(function (accumulator, key) {
+                                          accumulator[key] = node[key];
+                                      }, {})
+                                      .value();
 
-                        async.each(_.keys(geometries), function (key, callback) {
-                            pg('geometries')
-                                .insert({
-                                    'node_geometry': wkt.convert(geometries[key].geometry),
-                                    'node_key': key,
-                                    'node_uuid': result.uuid,
-                                    'properties': geometries[key].properties
-                                })
-                                .transacting(trx)
-                                .asCallback(callback);
-                        }, function (err) {
-                            callback(err, result);
-                        });
-                    }
-                )
+                    async.each(_.keys(geometries), function (key, callback) {
+                        pg('geometries')
+                            .insert({
+                                'node_geometry': wkt.convert(geometries[key].geometry),
+                                'node_key': key,
+                                'node_uuid': result.uuid,
+                                'properties': geometries[key].properties
+                            })
+                            .transacting(transactions.pgTrx)
+                            .asCallback(callback);
+                    }, callback);
+                }
             }
 
-            async.waterfall(tasks, function (err, result) {
-                callback(err, result);
-            })
+            async.parallel(tasks, function (err, result) {
+                callback(err, {
+                    uuid: result.neo4j
+                });
+            });
         }
 
-        function _getOrCreateNode(node, trx, callback) {
+        function _getOrCreateNode(node, transactions, callback) {
 
             if (_.isObject(node)) {
-                if (node.hasOwnProperty('uuid')) {
-                    if (node.uuid) {
-                        // se for um objeto com a propriedade "uuid" e essa propriedade tiver algum valor, obter esse objeto
-                        _getNode(node.uuid, callback)
-                    } else {
-                        callback(null, {})
-                    }
+                if (node.hasOwnProperty('uuid') && _.isUuid(node.uuid)) {
+                    _getNode(node.uuid, transactions, callback)
                 } else {
-                    // se for um objeto sem a propriedade "uuid", persistir no banco
-                    _createNode(node, trx, callback);
+                    _createNode(node, transactions, callback);
                 }
-            } else if (_.isUuid(node)) {
-                // se for passado direto um "uuid", procurar este objeto no banco
-                _getNode(node, callback);
             } else {
                 callback(null, {});
             }
@@ -264,9 +235,8 @@
             return statements;
         }
 
-        function _executeStatement(query, callback) {
-            // Executa a query no neo4j
-            db.query(query.statement, query.parameters, callback);
+        function _executeStatement(query, transaction, callback) {
+            db.query(query.statement, query.parameters, transaction, callback);
         }
 
         function _getRelationshipsToCreate(node) {
@@ -330,7 +300,7 @@
                         function (callback) {
                             async.map(_.keys(relationshipsToCreate), function (key, callback) {
                                 async.map(relationshipsToCreate[key], function (node, callback) {
-                                    _getOrCreateNode(node, options.trx,
+                                    _getOrCreateNode(node, options.transactions,
                                         function (err, result) {
                                             if (err) {
                                                 callback(err);
@@ -347,11 +317,11 @@
                         function (callback) {
                             if (options && options.detach) {
                                 async.eachSeries(_relateNodes(node.uuid, nodesToRelate, options), function (item, callback) {
-                                    _executeStatement(item, callback);
+                                    _executeStatement(item, options.transactions.trx, callback);
                                 }, callback);
                             } else {
                                 async.each(_relateNodes(node.uuid, nodesToRelate, options), function (item, callback) {
-                                    _executeStatement(item, callback);
+                                    _executeStatement(item, options.transactions.trx, callback);
                                 }, callback);
                             }
                         }
@@ -385,23 +355,17 @@
             _createRelationshipsRecursive(node, callback);
         }
 
-        function _createGraph(node, trx, callback) {
-
-            if (typeof trx == 'function' && !callback) {
-                callback = trx;
-            }
+        function _createGraph(node, transactions, callback) {
 
             async.waterfall([
-                function (callback) {
-                    _getOrCreateNode(node, trx, callback)
-                },
-                function (result, callback) {
+                async.apply(_getOrCreateNode, node, transactions),
 
+                function (result, callback) {
                     node.uuid = result.uuid;
                     _createRelationships(node, {
-                        trx: trx
+                        transactions: transactions
                     }, function (err) {
-                        callback(err, result.uuid, trx);
+                        callback(err, result.uuid);
                     });
                 },
             ], function (err, uuid) {
@@ -492,12 +456,29 @@
 
         function _parseResult(nodes, geometries, queryObject) {
 
-            _.each(nodes, function (item) {
-                if (item._type == 'node') {
+            let indexedNodes = {};
+
+            let result = _.transform(nodes, function (accumulator, item) {
+
+                if (item.constructor.name == 'Node') {
+                    let json = item.properties;
+
+                    indexedNodes[item.identity.low] = json;
+
+                    if (queryObject) {
+                        let propertiesToNegate = queryObject._negate;
+
+                        _.chain(propertiesToNegate)
+                         .split(',')
+                         .each((property) => {
+                             _deleteProperty(json, property);
+                         })
+                         .value();
+                    }
+
                     var relationships = _.chain(nodes)
-                                         .filter({
-                                             start: item.id,
-                                             '_type': 'relationship'
+                                         .filter((n) => {
+                                             return n.constructor.name == 'Relationship' && n.start.equals(item.identity);
                                          })
                                          .groupBy('type')
                                          .value();
@@ -505,16 +486,28 @@
                     _.chain(relationships)
                      .keys()
                      .each((relationshipName) => {
-                         item[relationshipName] = _.chain(relationships[relationshipName])
+                         json[relationshipName] = _.chain(relationships[relationshipName])
                                                    .map((r) => {
-                                                       return _.find(nodes, {id: r.end, '_type': 'node'});
+
+                                                       if (indexedNodes[r.end.low]) {
+                                                           return indexedNodes[r.end.low];
+                                                       }
+
+                                                       let node = _.find(nodes, (n) => {
+                                                           return r.end.equals(n.identity) &&
+                                                               n.constructor.name == 'Node';
+                                                       });
+
+                                                       indexedNodes[node.identity] = node.properties;
+
+                                                       return node.properties;
                                                    })
-                                                   .uniqBy('id')
+                                                   .uniqBy('uuid')
                                                    .filter()
                                                    .value();
 
-                         if (item[relationshipName].length == 1 && !item[relationshipName][0]._array) {
-                             item[relationshipName] = item[relationshipName][0]
+                         if (json[relationshipName].length == 1 && !json[relationshipName][0]._array) {
+                             json[relationshipName] = json[relationshipName][0]
                          }
                      })
                      .value();
@@ -533,17 +526,19 @@
                     _.chain(nodeGeometries)
                      .keys()
                      .each(function (key) {
-                         item[key] = nodeGeometries[key]
+                         json[key] = nodeGeometries[key]
                      })
                      .value();
-                }
-            });
 
-            _.each(nodes, (item) => {
+                    accumulator.push(json);
+                }
+            }, []);
+
+            _.each(result, (item) => {
                 _.chain(item)
                  .keys()
                  .each((key) => {
-                     if (_.startsWith(key, '_') && key != '_root' && key != '_label') {
+                     if (_.startsWith(key, '_') && key != '_label') {
                          delete item[key];
                      }
                  })
@@ -552,82 +547,62 @@
                 delete item.id;
             });
 
-            return _.chain(nodes)
-                    .filter('_root')
-                    .map((node) => {
-
-                        if (queryObject) {
-                            let propertiesToNegate = queryObject._negate;
-
-                            _.chain(propertiesToNegate)
-                             .split(',')
-                             .each((property) => {
-                                 _deleteProperty(node, property);
-                             })
-                             .value();
-                        }
-
-                        delete node._root;
-                        return node;
-                    })
+            return _.chain(result)
                     .uniqBy('uuid')
                     .value();
         }
 
         function _flattenResult(result) {
 
-            return _.chain(result)
-                    .transform(function (accumulator, next) {
-                        if (next.a) {
-                            next.a._root = true;
-                        }
+            return _.chain(result.records)
+                    .map('_fields')
+                    .flattenDeep()
+                    .value();
+        }
 
-                        if (_.isArray(next.r)) {
-                            _.each(next.r, (item) => {
-                                accumulator.push(item);
-                            });
-                        } else {
-                            accumulator.push(next.r);
-                        }
+        function _commitTransactions(transactions, callback) {
+            async.each(_.values(transactions), (trx, callback) => {
+                trx.commit();
+                callback();
+            }, callback);
+        }
 
-                        accumulator.push(next.a);
-                        accumulator.push(next.b);
-                    })
-                    .filter()
-                    .flatten()
-                    .uniqBy((item) => {
-                        return item._type + item.id;
-                    })
-                    .value()
+        function _rollbackTransactions(transactions, err, callback) {
+            async.each(_.values(transactions), (trx, callback) => {
+                trx.rollback();
+                callback();
+            }, () => {
+                callback(err);
+            });
         }
 
         this.createGraph = function (node, callback) {
             let
-                transaction = db.batch();
+                transactions = {
+                    trx: db.beginTransaction()
+                };
 
             async.waterfall([
                 function (callback) {
                     if (pg) {
-                        pg.transaction(function (trx) {
-                            _createGraph(node, trx, (err, uuid) => {
-                                if (err) {
-                                    trx.rollback();
-                                } else {
-                                    trx.commit();
-                                }
-                                callback(err, uuid);
-                            });
+                        pg.transaction(function (pgTrx) {
+                            transactions.pgTrx = pgTrx;
+
+                            _createGraph(node, transactions, callback);
                         });
                     } else {
-                        _createGraph(node, callback);
+                        _createGraph(node, transactions, callback);
                     }
-                },
-                function (uuid, callback) {
-                    transaction.commit(function (err) {
+                }
+            ], (err, uuid) => {
+                if (err) {
+                    _rollbackTransactions(transactions, err, callback);
+                } else {
+                    _commitTransactions(transactions, (err) => {
                         callback(err, uuid);
                     });
                 }
-            ], callback);
+            });
         }
 
         this.updateGraphs = function (graphs, options = {}, callback) {
@@ -640,7 +615,7 @@
                          .value();
 
             let transaction = db.batch(),
-                neo4jTask = (callback) => {
+                neo4jTask   = (callback) => {
                     async.each(nodes, (node, callback) => {
                         if (pg) {
                             pg.transaction((trx) => {
@@ -719,8 +694,8 @@
                                                 key: key,
                                                 geometry: wkt.convert(geometries[uuid][key].geometry)
                                             })
-                                                .transacting(trx)
-                                                .asCallback(callback);
+                                              .transacting(trx)
+                                              .asCallback(callback);
                                         }, callback)
                                     }, callback)
                                 },
@@ -763,16 +738,7 @@
             }
 
             async.waterfall([
-                function (callback) {
-                    _executeStatement({
-                        statement: 'MATCH (a) where a.uuid = {uuid}\n OPTIONAL MATCH (a)-[r*0..]->(b) RETURN a,r,b',
-                        parameters: {
-                            uuid: uuid
-                        }
-                    }, function (err, result) {
-                        callback(err, _flattenResult(result));
-                    });
-                },
+                async.apply(db.getById, uuid),
                 function (nodes, callback) {
                     if (pg) {
                         pg('geometries')
@@ -881,7 +847,7 @@
                     }, callback);
                 };
 
-            if (config.postgres) {
+            if (config.pg) {
                 pg.transaction((trx) => {
                     async.parallel([
                         (callback) => {
