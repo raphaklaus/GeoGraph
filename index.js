@@ -8,9 +8,7 @@
         neo4jManager  = require('./neo4j_manager'),
         wkt           = require('terraformer-wkt-parser'),
         moment        = require('moment'),
-        async         = require('async'),
-        kue           = require('kue'),
-        queue         = kue.createQueue();
+        async         = require('async');
 
 
     kue.app.listen(5000);
@@ -42,35 +40,6 @@
         this.pg = pg;
         this.db = db;
         this.es = es;
-
-        queue.process('createGraph', 1000, function (job, callback) {
-            let
-                transactions = {
-                    trx: db.beginTransaction()
-                };
-
-            async.waterfall([
-                function (callback) {
-                    if (pg) {
-                        pg.transaction(function (pgTrx) {
-                            transactions.pgTrx = pgTrx;
-
-                            _createGraph(job.data, transactions, callback);
-                        });
-                    } else {
-                        _createGraph(job.data, transactions, callback);
-                    }
-                }
-            ], (err, uuid) => {
-                if (err) {
-                    _rollbackTransactions(transactions, err, callback);
-                } else {
-                    _commitTransactions(transactions, (err) => {
-                        callback(err, uuid);
-                    });
-                }
-            });
-        });
 
         function _isGeoJSON(object) {
             return object && object.type == 'Feature' &&
@@ -611,13 +580,33 @@
         }
 
         function createGraph(node, callback) {
-            let job = queue.create('createGraph', node).save();
+            let
+                transactions = {
+                    trx: db.beginTransaction()
+                };
 
-            job.on('complete', (uuid) => {
-                callback(null, uuid);
+            async.waterfall([
+                function (callback) {
+                    if (pg) {
+                        pg.transaction(function (pgTrx) {
+                            transactions.pgTrx = pgTrx;
+
+                            _createGraph(node, transactions, callback);
+                        });
+                    } else {
+                        _createGraph(node, transactions, callback);
+                    }
+                }
+            ], (err, uuid) => {
+                if (err) {
+                    _rollbackTransactions(transactions, err, callback);
+                } else {
+                    _commitTransactions(transactions, (err) => {
+                        callback(err, uuid);
+                    });
+                }
             });
 
-            job.on('failed', callback);
         }
 
         this.createGraph = createGraph
