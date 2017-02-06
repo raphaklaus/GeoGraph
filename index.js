@@ -43,7 +43,7 @@
         this.db = db;
         this.es = es;
 
-        queue.process('createGraph', 30000, function (job, callback) {
+        queue.process('createGraph', 1000, function (job, callback) {
             let
                 transactions = {
                     trx: db.beginTransaction()
@@ -614,7 +614,6 @@
             let job = queue.create('createGraph', node).save();
 
             job.on('complete', (uuid) => {
-                console.log('aqui')
                 callback(null, uuid);
             });
 
