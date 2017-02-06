@@ -10,9 +10,6 @@
         moment        = require('moment'),
         async         = require('async');
 
-
-    kue.app.listen(5000);
-
     _.mixin(require('lodash-uuid'));
 
     module.exports = function (config) {
