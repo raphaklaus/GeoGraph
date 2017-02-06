@@ -45,29 +45,11 @@
     }
 
     module.exports = function (config) {
-        let session;
-        let sessionTimeout;
+
         let driver = neo4j.driver(`bolt://${config.host}`);
 
         function _getSession() {
-
-            if (sessionTimeout) {
-                clearTimeout(sessionTimeout);
-            }
-
-            if (!session) {
-                session = Session(driver.session());
-            }
-
-            return session;
-        }
-
-        function _closeSession() {
-            clearTimeout(sessionTimeout);
-            sessionTimeout = setTimeout(() => {
-                session.close();
-                session = null;
-            }, 1000);
+            return Session(driver.session());
         }
 
         function beginTransaction() {
@@ -96,7 +78,6 @@
             trx.run(cypher, {
                 node: json
             }, (err) => {
-                _closeSession();
                 callback(err, json.uuid);
             });
         }
