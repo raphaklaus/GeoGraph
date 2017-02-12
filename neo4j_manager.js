@@ -109,7 +109,7 @@
             });
         }
 
-        function query(cypher, parameters, transaction, callback) {
+        function query(cypher, parameters, transaction = _getSession(), callback) {
             if (typeof transaction == 'function' && !callback) {
                 callback    = transaction;
                 transaction = _getSession();

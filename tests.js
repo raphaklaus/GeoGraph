@@ -52,109 +52,11 @@
     //        count++;
     //        geograph.createGraph({
     //            name: 'Diego',
+    //            age: 24,
     //            friends: [{
-    //                uuid: "87ef9df3-573b-4e4e-ab74-c17bd9d8af80",
-    //                name: 'rafael'
-    //            },{
-    //                name: 'gabriel',
-    //                friends: {
-    //                    name: 'anderson',
-    //                    _array:true,
-    //                    address: {
-    //                        state: 'rj',
-    //                        city: 'rio de janeiro'
-    //                    },
-    //                    interests: [{
-    //                        'name': 'guns'
-    //                    }, {
-    //                        'name': 'military',
-    //                        test: {
-    //                            name: 'Diego',
-    //                            friends: [{
-    //                                name: 'rafael'
-    //                            },{
-    //                                name: 'gabriel',
-    //                                friends: {
-    //                                    name: 'anderson',
-    //                                    _array:true,
-    //                                    address: {
-    //                                        state: 'rj',
-    //                                        city: 'rio de janeiro',
-    //                                        uuid: "1547db2a-6cb3-4dcb-af76-b7ff6e307624"
-    //                                    },
-    //                                    interests: [{
-    //                                        'name': 'guns'
-    //                                    }, {
-    //                                        'name': 'military',
-    //                                        more_depth: {
-    //                                            name: 'Diego',
-    //                                            friends: [{
-    //                                                name: 'rafael'
-    //                                            },{
-    //                                                name: 'gabriel',
-    //                                                friends: {
-    //                                                    name: 'anderson',
-    //                                                    _array:true,
-    //                                                    address: {
-    //                                                        state: 'rj',
-    //                                                        city: 'rio de janeiro'
-    //                                                    },
-    //                                                    interests: [{
-    //                                                        'name': 'guns'
-    //                                                    }, {
-    //                                                        'name': 'military',
-    //                                                        test: {
-    //                                                            name: 'Diego',
-    //                                                            friends: [{
-    //                                                                name: 'rafael'
-    //                                                            },{
-    //                                                                name: 'gabriel',
-    //                                                                friends: {
-    //                                                                    name: 'anderson',
-    //                                                                    _array:true,
-    //                                                                    address: {
-    //                                                                        state: 'rj',
-    //                                                                        city: 'rio de janeiro',
-    //                                                                        uuid: "e26c3459-c0b3-4b37-9b7b-ac0db119054d"
-    //                                                                    },
-    //                                                                    interests: [{
-    //                                                                        'name': 'guns'
-    //                                                                    }, {
-    //                                                                        'name': 'military',
-    //                                                                        address: {
-    //                                                                            state: 'rj',
-    //                                                                            city: 'rio de janeiro',
-    //                                                                            address: {
-    //                                                                                state: 'rj',
-    //                                                                                city: 'rio de janeiro',
-    //                                                                                address: {
-    //                                                                                    state: 'rj',
-    //                                                                                    city: 'rio de janeiro'
-    //                                                                                }
-    //                                                                            }
-    //                                                                        }
-    //                                                                    }]
-    //                                                                }
-    //                                                            }, {
-    //                                                                name: 'amanda'
-    //                                                            }]
-    //                                                        }
-    //                                                    }]
-    //                                                }
-    //                                            }, {
-    //                                                name: 'amanda'
-    //                                            }]
-    //                                        }
-    //                                    }]
-    //                                }
-    //                            }, {
-    //                                name: 'amanda'
-    //                            }]
-    //                        }
-    //                    }]
-    //                }
+    //                'name': 'Rafael'
     //            }, {
-    //                name: 'amanda'
+    //                name: 'Amanda'
     //            }]
     //        }, (err, res) => {
     //            console.log(res);
@@ -168,9 +70,32 @@
     //);
 
     //console.time("tchoo tchoo bitchies")
-    //geograph.getById('e52a936c-f3d5-4621-bf79-96c6922892c3', function (err, result) {
+    //geograph.getById('48c55a16-c4e5-403c-a773-dcc8882e17a2', function (err, result) {
     //    console.timeEnd("tchoo tchoo bitchies")
     //    console.log(err, JSON.stringify(result));
     //})
+
+    geograph.save([{
+        "name": "Diego",
+        "uuid": "48c55a16-c4e5-403c-a773-dcc8882e17a2",
+        "age": 24,
+        "friends": [
+            {
+                "name": "Amanda",
+                "age": 18,
+                "uuid": "d261c352-f112-4bd2-9217-886d6e25e6ff"
+            },
+            {
+                "name": "Rafael",
+                "age": 34,
+                "uuid": "683e3699-0e8c-4edc-81a4-f9b87e3ce24b"
+            }
+        ]
+    }, {
+        "query": "outra query"
+    }], (err, result) => {
+        console.log(err)
+        console.log(result)
+    })
 
 })();

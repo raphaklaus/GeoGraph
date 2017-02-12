@@ -124,9 +124,7 @@
 
             graphToArrayRecursive(object);
 
-            return _.filter(nodes, (node) => {
-                return !_.isEmpty(node);
-            });
+            return _.filter(nodes, !_.isEmpty);
         }
 
         function _getNode(uuid, transactions, callback) {
@@ -361,15 +359,9 @@
         function _getNeo4jNode(node) {
             return _.chain(node)
                     .keys()
-                    .reject(function (key) {
-                        let value = node[key]
-                        return _isGeoJSON(value)
-                            || (_.isArray(value) && !_isArrayOfPrimitives(value))
-                            || (_.isObject(value) && !_.isArray(value));
-                    })
-                    .transform(function (result, next) {
-                        result[next] = node[next];
-                    }, {})
+                    .reject((key) => _isGeoJSON(node[key]) || (_.isArray(node[key]) && !_isArrayOfPrimitives(node[key]))
+                        || _.isObject(node[key]))
+                    .transform((result, next) => result[next] = node[next], {})
                     .value()
         }
 
@@ -377,7 +369,26 @@
             return _.isObject(node) && !_.isArray(node) && !_isGeoJSON(node);
         }
 
-        function createRelationshipCypher(value, key, id, statement, relatedNodes) {
+        function _getMatchQuery(node, id, params, options = {}) {
+
+            let cypher = `\nMATCH (${id} {uuid: $${id}.uuid})`
+            if (options.update) {
+                let update = _.chain(node)
+                              .keys()
+                              .map((key) => `${id}.${key} = $${id}.${key}`)
+                              .value();
+
+                if (update.length) {
+                    cypher += ' SET ' + update.join(', ')
+                }
+
+                params[id] = node;
+            }
+
+            return cypher;
+        }
+
+        function createRelationshipCypher(value, key, id, statement, relatedNodes, options) {
             if (_isNeo4jNode(value)) {
                 let
                     relatedId   = utils.getUniqueIdentifier(),
@@ -385,7 +396,7 @@
 
                 if (_.isUuid(relatedNode.uuid)) {
                     statement.cypher += `\nWITH ${id}`;
-                    statement.cypher += `\nMATCH (${relatedId}) where ${relatedId}.uuid = "${value.uuid}"`;
+                    statement.cypher += _getMatchQuery(relatedNode, relatedId, statement.params, options);
                     statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId})`;
                 } else {
                     relatedNode.uuid = node_uuid.v4();
@@ -398,7 +409,7 @@
             }
         }
 
-        function getCypherRecursive(id, node, statement) {
+        function getCypherRecursive(id, node, statement, options) {
 
             let relatedNodes = {};
 
@@ -413,40 +424,40 @@
                  let value = node[key];
 
                  if (_.isArray(value)) {
-                     _.each(value, (item) => createRelationshipCypher(item, key, id, statement, relatedNodes));
+                     _.each(value, (item) => createRelationshipCypher(item, key, id, statement, relatedNodes, options));
                  } else {
-                     createRelationshipCypher(value, key, id, statement, relatedNodes)
+                     createRelationshipCypher(value, key, id, statement, relatedNodes, options)
                  }
              })
              .value();
 
             _.chain(relatedNodes)
              .keys()
-             .each((key) => getCypherRecursive(key, relatedNodes[key], statement))
+             .each((key) => getCypherRecursive(key, relatedNodes[key], statement, options))
              .value();
 
             return statement;
         }
 
-        function _getCypher(node) {
+        function _getCypher(graph, options) {
             let
                 id        = utils.getUniqueIdentifier(),
                 uuid      = node_uuid.v4(),
+                node = _getNeo4jNode(graph),
                 statement = {
                     start: uuid,
                     params: {}
                 };
 
-            if (_.isUuid(node.uuid)) {
-                statement.cypher = `MATCH (${id}) where ${id}.uuid = "${uuid}"`
+            if (_.isUuid(graph.uuid)) {
+                statement.cypher = _getMatchQuery(node, id, statement.params, options)
             } else {
                 statement.cypher = `CREATE (${id} $${id})`;
-
-                statement.params[id]      = _getNeo4jNode(node);
+                statement.params[id] = node;
                 statement.params[id].uuid = uuid;
             }
 
-            getCypherRecursive(id, node, statement);
+            getCypherRecursive(id, graph, statement, options);
 
             return statement;
         }
@@ -656,20 +667,18 @@
                     .value();
         }
 
-        function _commitTransactions(transactions, callback) {
-            async.each(_.values(transactions), (trx, callback) => {
+        function _commitTransactions(transactions, results, callback) {
+            async.each(transactions, (trx, callback) => {
                 trx.commit();
                 callback();
-            }, callback);
+            }, (err) => callback(err, results));
         }
 
         function _rollbackTransactions(transactions, err, callback) {
-            async.each(_.values(transactions), (trx, callback) => {
+            async.each(transactions, (trx, callback) => {
                 trx.rollback();
                 callback();
-            }, () => {
-                callback(err);
-            });
+            }, () => callback(err));
         }
 
         function createGraph(node, callback) {
@@ -702,138 +711,172 @@
 
             let statement = _getCypher(node);
 
-            console.log(statement.cypher)
-            console.log(statement.params)
-
             db.query(statement.cypher, statement.params, (err) => callback(err, statement.start));
         }
 
-        this.createGraph = createGraph
+        this.save = function (graphs, options, callback) {
 
-        this.updateGraphs = function (graphs, options = {}, callback) {
+            if (!_.isArray(graphs)) {
+                graphs = [graphs];
+            }
+
+            if (typeof options == 'function' && !callback) {
+                callback = options;
+                options = {}
+            }
+
             let
-                nodes = _.chain(graphs)
-                         .map(_graphToArray)
-                         .flatten()
-                         .filter('uuid')
-                         .keyBy('uuid')
-                         .value();
+                transactions = {},
+                handler;
 
-            let transaction = db.batch(),
-                neo4jTask   = (callback) => {
-                    async.each(nodes, (node, callback) => {
-                        if (pg) {
-                            pg.transaction((trx) => {
-                                options.trx = trx;
-                                _createRelationships(node, options, callback);
-                            });
-                        } else {
-                            _createRelationships(node, options, callback);
-                        }
-                    }, callback);
-                };
+            if (options.transaction) {
+                transactions.tx = db.beginTransaction()
+            }
 
-            async.waterfall([
-                (callback) => {
-                    async.map(nodes, (node, callback) => {
-                        let statement = 'MATCH (n) WHERE n.uuid = {uuid} SET ',
-                            keys      = _.chain(node)
-                                         .keys()
-                                         .reject((key) => {
-                                             return key == 'uuid' ||
-                                                 (_.isObject(node[key]) && !_isArrayOfPrimitives(node[key])) ||
-                                                 _.startsWith(key, '_');
-                                         })
-                                         .value();
-
-                        _.each(keys, (key) => {
-                            statement += `n.${key} = {${key}}, `;
-                        });
-
-                        if (keys.length > 0) {
-                            statement += `n.updatedAt = {updatedAt} `;
-                            statement += 'RETURN n ';
-
-                            node.updatedAt = moment().format('YYYY-MM-DD HH:mm');
-
-                            callback(null, {
-                                statement: statement,
-                                parameters: node
-                            });
-                        } else {
-                            callback(null, null)
-                        }
-                    }, callback)
-                },
-                (queries, callback) => {
-                    async.map(_.filter(queries, 'statement'), (query, callback) => {
-                        _executeStatement(query, callback);
-                    }, callback)
-                },
-
-                (dbNodes, callback) => {
-                    if (pg) {
-                        pg.transaction((trx) => {
-                            let geometries = _.chain(nodes)
-                                              .keys()
-                                              .transform((result, uuid) => {
-                                                  result[uuid] = _.chain(nodes[uuid])
-                                                                  .keys()
-                                                                  .transform((geojsons, key) => {
-                                                                      if (_isGeoJSON(nodes[uuid][key])) {
-                                                                          geojsons[key] = nodes[uuid][key];
-                                                                      }
-                                                                  }, {})
-                                                                  .value();
-                                              }, {})
-                                              .value();
-
-                            async.parallel([
-                                (callback) => {
-                                    async.each(_.keys(geometries), (uuid, callback) => {
-                                        async.each(_.keys(geometries[uuid]), (key, callback) => {
-                                            pg.raw(`INSERT INTO geometries (node_uuid, node_key, node_geometry) 
-                            values ( :uuid, :key, :geometry) ON CONFLICT  ON CONSTRAINT uuid_key_unique 
-                            DO UPDATE SET node_geometry = :geometry`, {
-                                                uuid: uuid,
-                                                key: key,
-                                                geometry: wkt.convert(geometries[uuid][key].geometry)
-                                            })
-                                              .transacting(trx)
-                                              .asCallback(callback);
-                                        }, callback)
-                                    }, callback)
-                                },
-                                neo4jTask
-                            ], function (err) {
-                                if (err) {
-                                    trx.rollback();
-                                    callback(err);
-                                } else {
-                                    trx.commit().asCallback((errTrx) => {
-                                        callback(errTrx, nodes);
-                                    });
-                                }
-                            });
-                        })
+            if (options.ignoreErrors) {
+                handler = (err, result, callback) => {
+                    if (err) {
+                        callback(null, null);
                     } else {
-                        neo4jTask((err) => {
-                            callback(err, nodes);
-                        });
+                        callback(null, result);
                     }
                 }
-            ], (err, nodes) => {
-
-                if (err) {
-                    callback(err);
-                } else {
-                    transaction.commit();
-                    callback(null, _.chain(nodes)
-                                    .values()
-                                    .uniqBy('id')
-                                    .value());
+            } else {
+                handler = (err, result, callback) => {
+                    callback(err, result);
                 }
-            });
+            }
+
+            async.map(graphs, (graph, callback) => {
+                let statement = _getCypher(graph, { update: true});
+
+                db.query(statement.cypher, statement.params, transactions.tx, (err) => {
+                    handler(err, _.map(statement.params, 'uuid'), callback);
+                });
+
+            }, (err, results) => {
+                if (err) {
+                    _rollbackTransactions(transactions, err, callback)
+                } else {
+                    _commitTransactions(transactions, results, callback);
+                }
+            })
+
+            //let transaction = db.batch(),
+            //    neo4jTask   = (callback) => {
+            //        async.each(nodes, (node, callback) => {
+            //            if (pg) {
+            //                pg.transaction((trx) => {
+            //                    options.trx = trx;
+            //                    _createRelationships(node, options, callback);
+            //                });
+            //            } else {
+            //                _createRelationships(node, options, callback);
+            //            }
+            //        }, callback);
+            //    };
+            //
+            //async.waterfall([
+            //    (callback) => {
+            //        async.map(nodes, (node, callback) => {
+            //            let statement = 'MATCH (n) WHERE n.uuid = {uuid} SET ',
+            //                keys      = _.chain(node)
+            //                             .keys()
+            //                             .reject((key) => {
+            //                                 return key == 'uuid' ||
+            //                                     (_.isObject(node[key]) && !_isArrayOfPrimitives(node[key])) ||
+            //                                     _.startsWith(key, '_');
+            //                             })
+            //                             .value();
+            //
+            //            _.each(keys, (key) => {
+            //                statement += `n.${key} = {${key}}, `;
+            //            });
+            //
+            //            if (keys.length > 0) {
+            //                statement += `n.updatedAt = {updatedAt} `;
+            //                statement += 'RETURN n ';
+            //
+            //                node.updatedAt = moment().format('YYYY-MM-DD HH:mm');
+            //
+            //                callback(null, {
+            //                    statement: statement,
+            //                    parameters: node
+            //                });
+            //            } else {
+            //                callback(null, null)
+            //            }
+            //        }, callback)
+            //    },
+            //    (queries, callback) => {
+            //        async.map(_.filter(queries, 'statement'), (query, callback) => {
+            //            _executeStatement(query, callback);
+            //        }, callback)
+            //    },
+            //
+            //    (dbNodes, callback) => {
+            //        if (pg) {
+            //            pg.transaction((trx) => {
+            //                let geometries = _.chain(nodes)
+            //                                  .keys()
+            //                                  .transform((result, uuid) => {
+            //                                      result[uuid] = _.chain(nodes[uuid])
+            //                                                      .keys()
+            //                                                      .transform((geojsons, key) => {
+            //                                                          if (_isGeoJSON(nodes[uuid][key])) {
+            //                                                              geojsons[key] = nodes[uuid][key];
+            //                                                          }
+            //                                                      }, {})
+            //                                                      .value();
+            //                                  }, {})
+            //                                  .value();
+            //
+            //                async.parallel([
+            //                    (callback) => {
+            //                        async.each(_.keys(geometries), (uuid, callback) => {
+            //                            async.each(_.keys(geometries[uuid]), (key, callback) => {
+            //                                pg.raw(`INSERT INTO geometries (node_uuid, node_key, node_geometry)
+            //                values ( :uuid, :key, :geometry) ON CONFLICT  ON CONSTRAINT uuid_key_unique
+            //                DO UPDATE SET node_geometry = :geometry`, {
+            //                                    uuid: uuid,
+            //                                    key: key,
+            //                                    geometry: wkt.convert(geometries[uuid][key].geometry)
+            //                                })
+            //                                  .transacting(trx)
+            //                                  .asCallback(callback);
+            //                            }, callback)
+            //                        }, callback)
+            //                    },
+            //                    neo4jTask
+            //                ], function (err) {
+            //                    if (err) {
+            //                        trx.rollback();
+            //                        callback(err);
+            //                    } else {
+            //                        trx.commit().asCallback((errTrx) => {
+            //                            callback(errTrx, nodes);
+            //                        });
+            //                    }
+            //                });
+            //            })
+            //        } else {
+            //            neo4jTask((err) => {
+            //                callback(err, nodes);
+            //            });
+            //        }
+            //    }
+            //], (err, nodes) => {
+            //
+            //    if (err) {
+            //        callback(err);
+            //    } else {
+            //        transaction.commit();
+            //        callback(null, _.chain(nodes)
+            //                        .values()
+            //                        .uniqBy('id')
+            //                        .value());
+            //    }
+            //});
         }
 
         this.getById = function (uuid, queryObject, callback) {
