@@ -2,9 +2,10 @@
     "use strict";
 
     const
-        neo4j = require('neo4j-driver').v1,
-        uuid = require('uuid'),
-        _     = require('lodash');
+        neo4j   = require('neo4j-driver').v1,
+        uuid    = require('uuid'),
+        _       = require('lodash'),
+        Promise = require('bluebird');
 
     function nodeify(source, fn) {
         return function () {
@@ -22,13 +23,17 @@
         }
     }
 
-    function Transaction(trx) {
+    function Transaction(session, trx) {
         return {
             run: nodeify(trx, trx.run),
-            commit: nodeify(trx, trx.commit),
-            rollback: nodeify(trx, trx.rollback)
-        };
-    }
+            commit: () => new Promise(
+                (resolve, reject) => trx.commit().then(resolve, reject))
+                .finally(session.close),
+            rollback: new Promise(
+                (resolve, reject) => trx.rollback().then(resolve, reject))
+                .finally(session.close)
+        }
+    };
 
     function Session(session) {
         session.run = nodeify(session, session.run);
@@ -46,14 +51,23 @@
 
     module.exports = function (config) {
 
-        let driver = neo4j.driver(`bolt://${config.host}`);
+        let
+            driver  = neo4j.driver(`bolt://${config.host}`),
+            session = Session(driver.session());
 
         function _getSession() {
-            return Session(driver.session());
+
+            if (!session || session._hasTrx) {
+                session = Session(driver.session());
+            }
+
+            return session;
         }
 
         function beginTransaction() {
-            return Transaction(_getSession().beginTransaction());
+            let session = _getSession();
+
+            return Transaction(session, session.beginTransaction());
         }
 
         function createNode(json, label, trx, callback) {
@@ -97,7 +111,7 @@
 
         function query(cypher, parameters, transaction, callback) {
             if (typeof transaction == 'function' && !callback) {
-                callback = transaction;
+                callback    = transaction;
                 transaction = _getSession();
             }
 
@@ -106,8 +120,8 @@
 
         this.createNode       = createNode;
         this.beginTransaction = beginTransaction;
-        this.getById       = getById;
-        this.query       = query;
+        this.getById          = getById;
+        this.query            = query;
     }
 
 
