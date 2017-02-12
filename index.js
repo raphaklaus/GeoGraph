@@ -8,9 +8,12 @@
         neo4jManager  = require('./neo4j_manager'),
         wkt           = require('terraformer-wkt-parser'),
         moment        = require('moment'),
-        async         = require('async');
+        async         = require('async'),
+        node_uuid     = require('uuid'),
+        utils         = require('./utils');
 
     _.mixin(require('lodash-uuid'));
+
 
     module.exports = function (config) {
 
@@ -355,6 +358,88 @@
             _createRelationshipsRecursive(node, callback);
         }
 
+        function _getNeo4jNode(node) {
+            return _.chain(node)
+                    .keys()
+                    .reject(function (key) {
+                        let value = node[key]
+                        return _isGeoJSON(value)
+                            || (_.isArray(value) && !_isArrayOfPrimitives(value))
+                            || (_.isObject(value) && !_.isArray(value));
+                    })
+                    .transform(function (result, next) {
+                        result[next] = node[next];
+                    }, {})
+                    .value()
+        }
+
+        function _isNeo4jNode(node) {
+            return _.isObject(node) && !_.isArray(node) && !_isGeoJSON(node);
+        }
+
+        function createRelationshipCypher(value, key, id, statement, relatedNodes) {
+            if (_isNeo4jNode(value)) {
+                let
+                    relatedId   = utils.getUniqueIdentifier(),
+                    relatedNode = _getNeo4jNode(value);
+
+                relatedNode.uuid = node_uuid.v4();
+
+                statement.params[relatedId] = relatedNode;
+                statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId} $${relatedId})`;
+
+                relatedNodes[relatedId] = value;
+            }
+        }
+
+        function getCypherRecursive(id, node, statement) {
+
+            let relatedNodes = {};
+
+            if (_.some(node, _isNeo4jNode)) {
+                statement.params[id]      = _getNeo4jNode(node);
+                statement.params[id].uuid = node_uuid.v4();
+            }
+
+            _.chain(node)
+             .keys()
+             .each((key) => {
+                 let value = node[key];
+
+                 if (_.isArray(value)) {
+                     _.each(value, (item) => createRelationshipCypher(item, key, id, statement, relatedNodes));
+                 } else {
+                     createRelationshipCypher(value, key, id, statement, relatedNodes)
+                 }
+             })
+             .value();
+
+            _.chain(relatedNodes)
+             .keys()
+             .each((key) => getCypherRecursive(key, relatedNodes[key], statement))
+             .value();
+
+            return statement;
+        }
+
+        function _getCypher(node) {
+            let
+                id        = utils.getUniqueIdentifier(),
+                uuid      = node_uuid.v4(),
+                statement = {
+                    start: uuid,
+                    params: {},
+                    cypher: `CREATE (${id} $${id})`
+                };
+
+            statement.params[id]      = _getNeo4jNode(node);
+            statement.params[id].uuid = uuid;
+
+            getCypherRecursive(id, node, statement);
+
+            return statement;
+        }
+
         function _createGraph(node, transactions, callback) {
 
             async.waterfall([
@@ -577,33 +662,36 @@
         }
 
         function createGraph(node, callback) {
-            let
-                transactions = {
-                    trx: db.beginTransaction()
-                };
+            //let
+            //    transactions = {
+            //        trx: db.beginTransaction()
+            //    };
+            //
+            //async.waterfall([
+            //    function (callback) {
+            //        if (pg) {
+            //            pg.transaction(function (pgTrx) {
+            //                transactions.pgTrx = pgTrx;
+            //
+            //                _createGraph(node, transactions, callback);
+            //            });
+            //        } else {
+            //            _createGraph(node, transactions, callback);
+            //        }
+            //    }
+            //], (err, uuid) => {
+            //    if (err) {
+            //        _rollbackTransactions(transactions, err, callback);
+            //    } else {
+            //        _commitTransactions(transactions, (err) => {
+            //            callback(err, uuid);
+            //        });
+            //    }
+            //});
 
-            async.waterfall([
-                function (callback) {
-                    if (pg) {
-                        pg.transaction(function (pgTrx) {
-                            transactions.pgTrx = pgTrx;
+            let statement = _getCypher(node);
 
-                            _createGraph(node, transactions, callback);
-                        });
-                    } else {
-                        _createGraph(node, transactions, callback);
-                    }
-                }
-            ], (err, uuid) => {
-                if (err) {
-                    _rollbackTransactions(transactions, err, callback);
-                } else {
-                    _commitTransactions(transactions, (err) => {
-                        callback(err, uuid);
-                    });
-                }
-            });
-
+            db.query(statement.cypher, statement.params, (err) => callback(err, statement.start));
         }
 
         this.createGraph = createGraph
@@ -897,5 +985,7 @@
                 callback(err, (_parseResult(_flattenResult(result))));
             });
         }
+
+        this._getCypher = _getCypher;
     }
 })();
