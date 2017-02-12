@@ -383,10 +383,16 @@
                     relatedId   = utils.getUniqueIdentifier(),
                     relatedNode = _getNeo4jNode(value);
 
-                relatedNode.uuid = node_uuid.v4();
+                if (_.isUuid(relatedNode.uuid)) {
+                    statement.cypher += `\nWITH ${id}`;
+                    statement.cypher += `\nMATCH (${relatedId}) where ${relatedId}.uuid = "${value.uuid}"`;
+                    statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId})`;
+                } else {
+                    relatedNode.uuid = node_uuid.v4();
 
-                statement.params[relatedId] = relatedNode;
-                statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId} $${relatedId})`;
+                    statement.params[relatedId] = relatedNode;
+                    statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId} $${relatedId})`;
+                }
 
                 relatedNodes[relatedId] = value;
             }
@@ -428,12 +434,17 @@
                 uuid      = node_uuid.v4(),
                 statement = {
                     start: uuid,
-                    params: {},
-                    cypher: `CREATE (${id} $${id})`
+                    params: {}
                 };
 
-            statement.params[id]      = _getNeo4jNode(node);
-            statement.params[id].uuid = uuid;
+            if (_.isUuid(node.uuid)) {
+                statement.cypher = `MATCH (${id}) where ${id}.uuid = "${uuid}"`
+            } else {
+                statement.cypher = `CREATE (${id} $${id})`;
+
+                statement.params[id]      = _getNeo4jNode(node);
+                statement.params[id].uuid = uuid;
+            }
 
             getCypherRecursive(id, node, statement);
 
@@ -690,6 +701,9 @@
             //});
 
             let statement = _getCypher(node);
+
+            console.log(statement.cypher)
+            console.log(statement.params)
 
             db.query(statement.cypher, statement.params, (err) => callback(err, statement.start));
         }
