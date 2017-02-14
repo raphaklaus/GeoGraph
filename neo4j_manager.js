@@ -26,12 +26,18 @@
     function Transaction(session, trx) {
         return {
             run: nodeify(trx, trx.run),
-            commit: () => new Promise(
-                (resolve, reject) => trx.commit().then(resolve, reject))
-                .finally(session.close),
-            rollback: new Promise(
-                (resolve, reject) => trx.rollback().then(resolve, reject))
-                .finally(session.close)
+            commit: () =>
+                new Promise((resolve, reject) =>
+                    trx.commit().then(resolve, reject))
+                    .finally(() => {
+                        session.close();
+                    }),
+            rollback: () =>
+                new Promise((resolve, reject) =>
+                    trx.rollback().then(resolve, reject))
+                    .finally(() => {
+                        session.close();
+                    })
         }
     };
 
@@ -56,8 +62,7 @@
             session = Session(driver.session());
 
         function _getSession() {
-
-            if (!session || session._hasTrx) {
+            if (session._hasTx) {
                 session = Session(driver.session());
             }
 

@@ -360,7 +360,7 @@
             return _.chain(node)
                     .keys()
                     .reject((key) => _isGeoJSON(node[key]) || (_.isArray(node[key]) && !_isArrayOfPrimitives(node[key]))
-                        || _.isObject(node[key]))
+                    || _.isObject(node[key]))
                     .transform((result, next) => result[next] = node[next], {})
                     .value()
         }
@@ -391,6 +391,7 @@
         function createRelationshipCypher(value, key, id, statement, relatedNodes, options) {
             if (_isNeo4jNode(value)) {
                 let
+                    uuid        = node_uuid.v4(),
                     relatedId   = utils.getUniqueIdentifier(),
                     relatedNode = _getNeo4jNode(value);
 
@@ -399,7 +400,9 @@
                     statement.cypher += _getMatchQuery(relatedNode, relatedId, statement.params, options);
                     statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId})`;
                 } else {
-                    relatedNode.uuid = node_uuid.v4();
+                    value.uuid = uuid
+
+                    relatedNode.uuid = uuid;
 
                     statement.params[relatedId] = relatedNode;
                     statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId} $${relatedId})`;
@@ -412,11 +415,6 @@
         function getCypherRecursive(id, node, statement, options) {
 
             let relatedNodes = {};
-
-            if (_.some(node, _isNeo4jNode)) {
-                statement.params[id]      = _getNeo4jNode(node);
-                statement.params[id].uuid = node_uuid.v4();
-            }
 
             _.chain(node)
              .keys()
@@ -443,7 +441,7 @@
             let
                 id        = utils.getUniqueIdentifier(),
                 uuid      = node_uuid.v4(),
-                node = _getNeo4jNode(graph),
+                node      = _getNeo4jNode(graph),
                 statement = {
                     start: uuid,
                     params: {}
@@ -452,14 +450,49 @@
             if (_.isUuid(graph.uuid)) {
                 statement.cypher = _getMatchQuery(node, id, statement.params, options)
             } else {
-                statement.cypher = `CREATE (${id} $${id})`;
-                statement.params[id] = node;
+                graph.uuid = uuid;
+
+                statement.cypher          = `CREATE (${id} $${id})`;
+                statement.params[id]      = node;
                 statement.params[id].uuid = uuid;
             }
 
             getCypherRecursive(id, graph, statement, options);
 
             return statement;
+        }
+
+        function _getSql(graph, statements) {
+            statements = statements || [];
+
+            if (_isNeo4jNode(graph)) {
+                _.chain(graph)
+                 .keys()
+                 .each((key) => {
+                     let value     = graph[key],
+                         statement = {};
+
+                     if (_isGeoJSON(value)) {
+                         statement.sql    = 'INSERT INTO geometries (node_uuid, node_key, node_geometry)\n';
+                         statement.sql += 'values ( :uuid, :key, :geometry) ON CONFLICT ON CONSTRAINT uuid_key_unique\n'
+                         statement.sql += 'DO UPDATE SET node_geometry = :geometry'
+                         statement.params = {
+                             uuid: graph.uuid,
+                             key: key,
+                             geometry: wkt.convert(value.geometry)
+                         }
+
+                         statements.push(statement);
+                     } else if (_.isArray(value)) {
+                         _.each(value, (item) => _getSql(item, statements));
+                     } else {
+                         _getSql(value, statements)
+                     }
+                 })
+                 .value();
+            }
+
+            return statements;
         }
 
         function _createGraph(node, transactions, callback) {
@@ -669,8 +702,13 @@
 
         function _commitTransactions(transactions, results, callback) {
             async.each(transactions, (trx, callback) => {
-                trx.commit();
-                callback();
+                let promise = trx.commit();
+
+                if (promise) {
+                    promise.asCallback(callback);
+                } else {
+                    callback();
+                }
             }, (err) => callback(err, results));
         }
 
@@ -714,7 +752,7 @@
             db.query(statement.cypher, statement.params, (err) => callback(err, statement.start));
         }
 
-        this.save = function (graphs, options, callback) {
+        this.save = function (graphs, options = {}, callback) {
 
             if (!_.isArray(graphs)) {
                 graphs = [graphs];
@@ -722,16 +760,10 @@
 
             if (typeof options == 'function' && !callback) {
                 callback = options;
-                options = {}
+                options  = {}
             }
 
-            let
-                transactions = {},
-                handler;
-
-            if (options.transaction) {
-                transactions.tx = db.beginTransaction()
-            }
+            let handler;
 
             if (options.ignoreErrors) {
                 handler = (err, result, callback) => {
@@ -748,19 +780,38 @@
             }
 
             async.map(graphs, (graph, callback) => {
-                let statement = _getCypher(graph, { update: true});
-
-                db.query(statement.cypher, statement.params, transactions.tx, (err) => {
-                    handler(err, _.map(statement.params, 'uuid'), callback);
-                });
-
-            }, (err, results) => {
-                if (err) {
-                    _rollbackTransactions(transactions, err, callback)
-                } else {
-                    _commitTransactions(transactions, results, callback);
+                let transactions = {
+                    tx: db.beginTransaction()
                 }
-            })
+
+                let neo4jStatement = _getCypher(graph, {update: true}),
+                    sqlStatements  = _getSql(graph),
+                    tasks          = [
+                        (callback) =>
+                            db.query(neo4jStatement.cypher, neo4jStatement.params, transactions.tx, (err) =>
+                                handler(err, _.map(neo4jStatement.params, 'uuid'), callback))
+                    ];
+
+                if (pg) {
+                    tasks.push(
+                        (callback) =>
+                            pg.transaction((pgTrx) => {
+                                transactions.pgtrx = pgTrx;
+                                async.each(sqlStatements, (statement, callback) =>
+                                    pg.raw(statement.sql, statement.params)
+                                      .transacting(pgTrx)
+                                      .asCallback(callback), callback);
+                            })
+                    )
+                }
+                async.series(tasks, (err, results) => {
+                    if (err) {
+                        _rollbackTransactions(transactions, err, callback);
+                    } else {
+                        _commitTransactions(transactions, results, callback);
+                    }
+                });
+            }, callback);
 
             //let transaction = db.batch(),
             //    neo4jTask   = (callback) => {
@@ -1044,5 +1095,6 @@
         }
 
         this._getCypher = _getCypher;
+        this._getSql    = _getSql;
     }
 })();
