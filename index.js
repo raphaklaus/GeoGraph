@@ -5,10 +5,8 @@
         _             = require('lodash'),
         turf          = require('turf'),
         knex          = require('knex'),
-        elasticsearch = require('elasticsearch'),
         neo4jManager  = require('./neo4j_manager'),
         wkt           = require('terraformer-wkt-parser'),
-        moment        = require('moment'),
         async         = require('async'),
         node_uuid     = require('uuid'),
         utils         = require('./utils');

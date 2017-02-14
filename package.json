@@ -19,17 +19,13 @@
   "dependencies": {
     "async": "^2.1.4",
     "bluebird": "^3.4.7",
-    "elasticsearch": "^12.1.3",
     "knex": "^0.12.6",
-    "kue": "^0.11.5",
     "lodash": "^4.17.4",
     "lodash-uuid": "0.0.3",
-    "moment": "^2.17.1",
     "neo4j-driver": "git+https://github.com/dodiego/neo4j-javascript-driver.git",
     "pg": "^6.1.2",
-    "seraph": "git+https://github.com/dodiego/seraph.git",
     "terraformer-wkt-parser": "^1.1.2",
-    "then-nodeify": "^1.0.1",
+    "turf": "^3.0.14",
     "uuid": "^3.0.1"
   }
 }
