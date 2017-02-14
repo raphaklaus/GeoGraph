@@ -54,39 +54,39 @@
     //fs.createReadStream('./data.json').pipe(stream.input);
     //console.log('show');
 
-    //console.time('tick tack bitches')
-    //var count = 0;
-    //async.during(
-    //    function (callback) {
-    //        return callback(null, count < 1);
-    //    },
-    //    function (callback) {
-    //        count++;
-    //        geograph.save({
-    //            name: 'Diego',
-    //            age: 24,
-    //            "geometry": turf.point([-43.505859375, -19.559790136497398]),
-    //            friends: [{
-    //                'name': 'Rafael',
-    //                "test": turf.point([-43.505859375, -19.559790136497398])
-    //            }, {
-    //                name: 'Amanda'
-    //            }]
-    //        }, (err, result) => {
-    //            console.log(err, result)
-    //            callback(err, result);
-    //        });
-    //    },
-    //    function (err) {
-    //        console.timeEnd('tick tack bitches');
-    //    }
-    //);
+    console.time('tick tack bitches')
+    var count = 0;
+    async.during(
+        function (callback) {
+            return callback(null, count < 1);
+        },
+        function (callback) {
+            count++;
+            geograph.save({
+                name: 'Diego',
+                age: 24,
+                "geometry": turf.point([-43.505859375, -19.559790136497398]),
+                friends: [{
+                    'name': 'Rafael',
+                    "test": turf.point([-43.505859375, -19.559790136497398])
+                }, {
+                    name: 'Amanda'
+                }]
+            }, (err, result) => {
+                console.log(err, result)
+                callback(err, result);
+            });
+        },
+        function (err) {
+            console.timeEnd('tick tack bitches');
+        }
+    );
 
-    console.time("tchoo tchoo bitchies")
-    geograph.getById( '0e77c7a1-0473-4d43-9900-ea0ce03e7ac6', function (err, result) {
-        console.timeEnd("tchoo tchoo bitchies")
-        console.log(err, JSON.stringify(result));
-    })
+    //console.time("tchoo tchoo bitchies")
+    //geograph.getById( '0e77c7a1-0473-4d43-9900-ea0ce03e7ac6', function (err, result) {
+    //    console.timeEnd("tchoo tchoo bitchies")
+    //    console.log(err, JSON.stringify(result));
+    //})
 
     //geograph.save([{
     //    "name": "Diego",

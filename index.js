@@ -322,7 +322,7 @@
                     tasks          = [
                         (callback) =>
                             db.query(neo4jStatement.cypher, neo4jStatement.params, transactions.tx, (err) =>
-                                handler(err, _.map(neo4jStatement.params, 'uuid'), callback))
+                                handler(err, neo4jStatement.start, callback))
                     ];
 
                 if (pg) {
@@ -337,14 +337,20 @@
                             })
                     )
                 }
-                async.series(tasks, (err, results) => {
+                async.series(tasks, (err) => {
                     if (err) {
                         _rollbackTransactions(transactions, err, callback);
                     } else {
-                        _commitTransactions(transactions, results, callback);
+                        _commitTransactions(transactions, neo4jStatement.start, callback);
                     }
                 });
-            }, callback);
+            }, (err, results) => {
+                if (graphs.length > 1) {
+                    callback(err, results)
+                } else {
+                    callback(err, _.first(results))
+                }
+            });
 
         }
 
