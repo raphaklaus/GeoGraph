@@ -247,9 +247,7 @@
                 if (err) {
                     callback(err);
                 } else {
-                    let response = _.first(_parseResult(nodes, geometries, queryObject));
-
-                    callback(null, response);
+                    callback(null, _parseResult(nodes, geometries, queryObject));
                 }
             });
         }
@@ -419,7 +417,9 @@
                 params: {
                     uuid: uuid
                 }
-            }, queryObject, callback);
+            }, queryObject, (err, result) => {
+                callback(err, _.first(result))
+            });
         }
 
         this.list = function (label, queryObject, callback) {
