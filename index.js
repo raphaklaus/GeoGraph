@@ -2,14 +2,14 @@
     'use strict';
 
     const
-        _             = require('lodash'),
-        turf          = require('turf'),
-        knex          = require('knex'),
-        neo4jManager  = require('./neo4j_manager'),
-        wkt           = require('terraformer-wkt-parser'),
-        async         = require('async'),
-        node_uuid     = require('uuid'),
-        utils         = require('./utils');
+        _            = require('lodash'),
+        turf         = require('turf'),
+        knex         = require('knex'),
+        neo4jManager = require('./neo4j_manager'),
+        wkt          = require('terraformer-wkt-parser'),
+        async        = require('async'),
+        node_uuid    = require('uuid'),
+        utils        = require('./utils');
 
     _.mixin(require('lodash-uuid'));
 
@@ -173,19 +173,27 @@
                      let value     = graph[key],
                          statement = {};
 
-                     if (_isGeoJSON(value) || !value) {
+                     if (_isGeoJSON(value)) {
                          statement.sql    = 'INSERT INTO geometries (node_uuid, node_key, node_geometry)\n';
                          statement.sql += 'values ( :uuid, :key, :geometry) ON CONFLICT ON CONSTRAINT uuid_key_unique\n'
                          statement.sql += 'DO UPDATE SET node_geometry = :geometry'
                          statement.params = {
                              uuid: graph.uuid,
                              key: key,
-                             geometry: value? wkt.convert(value.geometry) : null
+                             geometry: wkt.convert(value.geometry)
                          }
 
                          statements.push(statement);
                      } else if (_.isArray(value)) {
                          _.each(value, (item) => _getSql(item, statements));
+                     } else if (!value) {
+                         statement.sql    = 'DELETE FROM geometries where node_uuid = :uuid and node_key = :key'
+                         statement.params = {
+                             uuid: graph.uuid,
+                             key: key
+                         }
+
+                         statements.push(statement);
                      } else {
                          _getSql(value, statements)
                      }
