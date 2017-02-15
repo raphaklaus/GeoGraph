@@ -61,7 +61,7 @@
             return _.chain(node)
                     .keys()
                     .reject((key) => _isGeoJSON(node[key]) || (_.isArray(node[key]) && !_isArrayOfPrimitives(node[key]))
-                    || _.isObject(node[key]))
+                    || _.isObject(node[key]) || key == '_label')
                     .transform((result, next) => result[next] = node[next], {})
                     .value()
         }
