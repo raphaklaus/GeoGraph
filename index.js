@@ -105,8 +105,14 @@
 
                     relatedNode.uuid = uuid;
 
+                    if (relatedNode._label) {
+                        let label = _.words(relatedNode._label)[0];
+                        statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId}:${label} $${relatedId})`
+                    } else {
+                        statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId} $${relatedId})`;
+                    }
+
                     statement.params[relatedId] = relatedNode;
-                    statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId} $${relatedId})`;
                 }
 
                 relatedNodes[relatedId] = value;
@@ -153,7 +159,14 @@
             } else {
                 graph.uuid = uuid;
 
-                statement.cypher          = `CREATE (${id} $${id})`;
+                if (graph._label) {
+                    let label        = _.words(graph._label)[0];
+                    statement.cypher = `CREATE (${id}:${label} $${id})`;
+                } else {
+                    statement.cypher = `CREATE (${id} $${id})`;
+
+                }
+
                 statement.params[id]      = node;
                 statement.params[id].uuid = uuid;
             }
@@ -202,6 +215,43 @@
             }
 
             return statements;
+        }
+
+        function _get(neo4jStatement, queryObject, callback) {
+            if (typeof queryObject == 'function' && !callback) {
+                callback = queryObject
+            }
+
+            let tasks = [
+                (callback) =>
+                    db.query(neo4jStatement.cypher, neo4jStatement.params, (err, result) => callback(err, _flattenResult(result)))
+            ];
+
+            if (pg) {
+                tasks.push(
+                    (nodes, callback) => {
+                        pg('geometries')
+                            .whereIn('node_uuid', _.chain(nodes)
+                                                   .filter((item) => item.constructor.name == 'Node')
+                                                   .map('properties.uuid')
+                                                   .value())
+                            .select('node_uuid', 'node_key', 'properties',
+                                pg.raw('ST_AsGeoJSON(node_geometry)::json as node_geometry'))
+                            .asCallback((err, geometries) => callback(err, nodes, geometries))
+
+                    }
+                )
+            }
+
+            async.waterfall(tasks, function (err, nodes, geometries) {
+                if (err) {
+                    callback(err);
+                } else {
+                    let response = _.first(_parseResult(nodes, geometries, queryObject));
+
+                    callback(null, response);
+                }
+            });
         }
 
         function _parseResult(nodes, geometries) {
@@ -362,44 +412,22 @@
 
         this.getById = function (uuid, queryObject, callback) {
 
-            if (typeof queryObject == 'function' && !callback) {
-                callback = queryObject
-            }
-
-            let tasks = [
-                (callback) =>
-                    db.query('MATCH (a) where a.uuid = $uuid\n ' +
-                        'WITH a MATCH (a)-[r*0..]->(b) ' +
-                        'RETURN collect(b), collect(r)', {
-                        uuid: uuid
-                    }, (err, result) => callback(err, _flattenResult(result)))
-            ];
-
-            if (pg) {
-                tasks.push(
-                    (nodes, callback) => {
-                        pg('geometries')
-                            .whereIn('node_uuid', _.chain(nodes)
-                                                   .filter((item) => item.constructor.name == 'Node')
-                                                   .map('properties.uuid')
-                                                   .value())
-                            .select('node_uuid', 'node_key', 'properties',
-                                pg.raw('ST_AsGeoJSON(node_geometry)::json as node_geometry'))
-                            .asCallback((err, geometries) => callback(err, nodes, geometries))
-
-                    }
-                )
-            }
-
-            async.waterfall(tasks, function (err, nodes, geometries) {
-                if (err) {
-                    callback(err);
-                } else {
-                    let response = _.first(_parseResult(nodes, geometries, queryObject));
-
-                    callback(null, response);
+            _get({
+                cypher: 'MATCH (a {uuid: $uuid})\n' +
+                'WITH a MATCH (a)-[r*0..]->(b)\n' +
+                'RETURN collect(b), collect(r)',
+                params: {
+                    uuid: uuid
                 }
-            });
+            }, queryObject, callback);
+        }
+
+        this.list = function (label, queryObject, callback) {
+            _get({
+                cypher: `MATCH (a:${label})\n ` +
+                'WITH a MATCH (a)-[r*0..]->(b) ' +
+                'RETURN collect(b), collect(r)'
+            }, queryObject, callback);
         }
 
         this.deleteNodes = function (uuids, callback) {
