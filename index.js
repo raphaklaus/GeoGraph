@@ -410,6 +410,10 @@
 
         this.getById = function (uuid, queryObject, callback) {
 
+            if (typeof queryObject == 'function' && !callback) {
+                callback = queryObject
+            }
+
             _get({
                 cypher: 'MATCH (a {uuid: $uuid})\n' +
                 'WITH a MATCH (a)-[r*0..]->(b)\n' +
@@ -423,6 +427,11 @@
         }
 
         this.list = function (label, queryObject, callback) {
+            
+            if (typeof queryObject == 'function' && !callback) {
+                callback = queryObject
+            }
+
             _get({
                 cypher: `MATCH (a:${label})\n ` +
                 'WITH a MATCH (a)-[r*0..]->(b) ' +
