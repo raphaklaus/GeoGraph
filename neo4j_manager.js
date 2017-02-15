@@ -47,14 +47,6 @@
         return session;
     }
 
-    function _flattenResult(result) {
-
-        return _.chain(result.records)
-                .map('_fields')
-                .flattenDeep()
-                .value();
-    }
-
     module.exports = function (config) {
 
         let
@@ -75,45 +67,6 @@
             return Transaction(session, session.beginTransaction());
         }
 
-        function createNode(json, label, trx, callback) {
-
-            if (typeof trx == 'function' && !callback) {
-                callback = trx;
-                trx      = _getSession();
-            }
-
-            label = _.words()[0] || '';
-
-            let cypher = '';
-
-            if (label) {
-                cypher = `CREATE (n:${label} $node) return id(n)`
-            } else {
-                cypher = 'CREATE (n $node) return id(n)'
-            }
-
-            json.uuid = uuid.v4();
-
-            trx.run(cypher, {
-                node: json
-            }, (err) => {
-                callback(err, json.uuid);
-            });
-        }
-
-        function getById(uuid, callback) {
-            _getSession().run('MATCH (a) where a.uuid = $uuid\n WITH a MATCH (a)-[r*0..]->(b) ' +
-                'RETURN collect(b), collect(r)', {
-                uuid: uuid
-            }, (err, result) => {
-                if (err) {
-                    callback(err);
-                } else {
-                    callback(err, _flattenResult(result));
-                }
-            });
-        }
-
         function query(cypher, parameters, transaction = _getSession(), callback) {
             if (typeof transaction == 'function' && !callback) {
                 callback    = transaction;
@@ -123,9 +76,7 @@
             transaction.run(cypher, parameters, callback);
         }
 
-        this.createNode       = createNode;
         this.beginTransaction = beginTransaction;
-        this.getById          = getById;
         this.query            = query;
     }
 

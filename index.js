@@ -176,6 +176,28 @@
             return statement;
         }
 
+        function _paginate(queryObject = {}) {
+            let cypher = '\n';
+
+            if (queryObject._skip) {
+                cypher += `SKIP ${queryObject._skip}\n`
+            }
+
+            if (queryObject._take) {
+                cypher += `LIMIT ${queryObject._take}\n`
+            }
+
+            return cypher;
+        }
+
+        function _order(queryObject = {}) {
+            let cypher = '';
+
+            if (queryObject._order) {
+
+            }
+        }
+
         function _getSql(graph, statements) {
             statements = statements || [];
 
@@ -415,7 +437,7 @@
             }
 
             _get({
-                cypher: 'MATCH (a {uuid: $uuid})\n' +
+                cypher: `MATCH (a {uuid: $uuid}) ${_paginate(queryObject)}` +
                 'WITH a MATCH (a)-[r*0..]->(b)\n' +
                 'RETURN collect(b), collect(r)',
                 params: {
@@ -434,7 +456,8 @@
 
             _get({
                 cypher: `MATCH (a:${label})\n ` +
-                'WITH a MATCH (a)-[r*0..]->(b) ' +
+                'WITH a\n' +
+                'MATCH (a)-[r*0..]->(b)\n' +
                 'RETURN collect(b), collect(r)'
             }, queryObject, callback);
         }
