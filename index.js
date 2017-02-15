@@ -173,7 +173,7 @@
                      let value     = graph[key],
                          statement = {};
 
-                     if (_isGeoJSON(value)) {
+                     if (_isGeoJSON(value) || !value) {
                          statement.sql    = 'INSERT INTO geometries (node_uuid, node_key, node_geometry)\n';
                          statement.sql += 'values ( :uuid, :key, :geometry) ON CONFLICT ON CONSTRAINT uuid_key_unique\n'
                          statement.sql += 'DO UPDATE SET node_geometry = :geometry'
