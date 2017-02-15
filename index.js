@@ -180,7 +180,7 @@
                          statement.params = {
                              uuid: graph.uuid,
                              key: key,
-                             geometry: wkt.convert(value.geometry)
+                             geometry: value? wkt.convert(value.geometry) : null
                          }
 
                          statements.push(statement);
