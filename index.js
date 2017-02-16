@@ -105,8 +105,8 @@
 
                     relatedNode.uuid = uuid;
 
-                    if (relatedNode._label) {
-                        let label = _.words(relatedNode._label)[0];
+                    if (value._label) {
+                        let label = value._label.split(/\s/)[0]
                         statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId}:${label} $${relatedId})`
                     } else {
                         statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId} $${relatedId})`;
@@ -160,7 +160,7 @@
                 graph.uuid = uuid;
 
                 if (graph._label) {
-                    let label        = _.words(graph._label)[0];
+                    let label        = graph._label.split(/\s/)[0];
                     statement.cypher = `CREATE (${id}:${label} $${id})`;
                 } else {
                     statement.cypher = `CREATE (${id} $${id})`;
@@ -189,6 +189,50 @@
 
             return cypher;
         }
+
+        function _getRelationshipIdentifer(relationship, variables) {
+            let identifies = utils.getUniqueIdentifier();
+
+            variables.push(identifies);
+
+            return `${identifies}:${relationship.split('-').join('|')}` ;
+        }
+
+        function _addMatchRelationship(startVariable, relationshipString, statements) {
+            let relationships     = relationshipString.split('.');
+
+            statements.cypher += `\nMATCH (${startVariable})`;
+
+            _.each(relationships, (relationship) => {
+                let end = utils.getUniqueIdentifier();
+                statements.variables.push(end)
+                statements.cypher += `-[${_getRelationshipIdentifer(relationship, statements.variables)}]->(${end})`
+            });
+        }
+
+        function _matchRelationships(startVariable, queryObject = {}, statements = {cypher: '', variables: []}) {
+            _.each(queryObject._relations, (path) => _addMatchRelationship(startVariable, path, statements));
+
+            return statements;
+        }
+
+        function _listCypher(queryObject = {}) {
+            let
+                statement = {
+                cypher: '',
+                variables: []
+            },
+                start = utils.getUniqueIdentifier(),
+                matchRelationshipsStatement = _matchRelationships(start, queryObject, statement);
+
+            statement.variables.push(start);
+
+            statement.cypher = `MATCH (${start}:${queryObject._label})\n`+
+                `${matchRelationshipsStatement.cypher}\n` +
+                `RETURN ${statement.variables.join(',')}`;
+
+            return statement.cypher;
+    }
 
         function _order(queryObject = {}) {
             let cypher = '';
@@ -278,7 +322,8 @@
 
             let
                 indexedNodes      = {},
-                indexedGeometries = _.groupBy(geometries, 'node_uuid');
+                indexedGeometries = _.groupBy(geometries, 'node_uuid'),
+                hasRelationships = _.some(nodes, (node) => node.constructor.name == 'Relationship');
 
             let result = _.transform(nodes, function (accumulator, item) {
 
@@ -293,45 +338,47 @@
                                          .groupBy('type')
                                          .value();
 
-                    _.chain(relationships)
-                     .keys()
-                     .each((relationshipName) => {
-                         json[relationshipName] = _.chain(relationships[relationshipName])
-                                                   .map((r) => {
+                    let relationshipKeys = _.keys(relationships);
 
-                                                       if (indexedNodes[r.end.low]) {
-                                                           return indexedNodes[r.end.low];
-                                                       }
+                    _.each(relationshipKeys, (relationshipName) => {
+                        json[relationshipName] = _.chain(relationships[relationshipName])
+                                                  .map((r) => {
 
-                                                       let node = _.find(nodes, (n) => {
-                                                           return r.end.equals(n.identity) &&
-                                                               n.constructor.name == 'Node';
-                                                       });
+                                                      if (indexedNodes[r.end.low]) {
+                                                          return indexedNodes[r.end.low];
+                                                      }
 
-                                                       indexedNodes[node.identity] = node.properties;
+                                                      let node = _.find(nodes, (n) => {
+                                                          return r.end.equals(n.identity) &&
+                                                              n.constructor.name == 'Node';
+                                                      });
 
-                                                       return node.properties;
-                                                   })
-                                                   .uniqBy('uuid')
-                                                   .filter()
-                                                   .value();
+                                                      indexedNodes[node.identity] = node.properties;
 
-                         if (json[relationshipName].length == 1 && !json[relationshipName][0]._array) {
-                             json[relationshipName] = json[relationshipName][0]
-                         }
-                     })
-                     .value();
+                                                      return node.properties;
+                                                  })
+                                                  .uniqBy('uuid')
+                                                  .filter()
+                                                  .value();
+
+                        if (json[relationshipName].length == 1 && !json[relationshipName][0]._array) {
+                            json[relationshipName] = json[relationshipName][0]
+                        }
+                    })
+
+                    if (hasRelationships && relationshipKeys.length || !hasRelationships) {
+                        accumulator[json.uuid] = json
+                    }
+
 
                     _.each(indexedGeometries[json.uuid], (geometry) =>
                         json[geometry.node_key] =
                             turf.feature(geometry.node_geometry,
                                 geometry.properties));
-
-                    accumulator.push(json);
                 }
-            }, []);
+            }, {});
 
-            return result;
+            return _.values(result);
         }
 
         function _flattenResult(result = {}) {
@@ -401,6 +448,7 @@
                                 handler(err, neo4jStatement.start, callback))
                     ];
 
+
                 if (pg) {
                     tasks.push(
                         (callback) =>
@@ -437,7 +485,7 @@
             }
 
             _get({
-                cypher: `MATCH (a {uuid: $uuid}) ${_paginate(queryObject)}` +
+                cypher: `MATCH (a {uuid: $uuid})` +
                 'WITH a MATCH (a)-[r*0..]->(b)\n' +
                 'RETURN collect(b), collect(r)',
                 params: {
@@ -448,17 +496,17 @@
             });
         }
 
-        this.list = function (label, queryObject, callback) {
-            
+        this.list = function (queryObject, callback) {
+
             if (typeof queryObject == 'function' && !callback) {
                 callback = queryObject
             }
 
+            let cypher = _listCypher(queryObject)
+            console.log(cypher)
+
             _get({
-                cypher: `MATCH (a:${label})\n ` +
-                'WITH a\n' +
-                'MATCH (a)-[r*0..]->(b)\n' +
-                'RETURN collect(b), collect(r)'
+                cypher
             }, queryObject, callback);
         }
 

@@ -82,11 +82,11 @@
     //    }
     //);
 
-    console.time("tchoo tchoo bitchies")
-    geograph.getById( '4f921980-e303-49f9-affd-a6b46c1f1e08', function (err, result) {
-        console.timeEnd("tchoo tchoo bitchies")
-        console.log(err, JSON.stringify(result));
-    })
+    //console.time("tchoo tchoo bitchies")
+    //geograph.getById( '4f921980-e303-49f9-affd-a6b46c1f1e08', function (err, result) {
+    //    console.timeEnd("tchoo tchoo bitchies")
+    //    console.log(err, JSON.stringify(result));
+    //})
 
     //geograph.save([{
     //    "name": "Diego",
@@ -112,8 +112,8 @@
     //})
 
     //geograph.save({
+    //    "_label": "test3",
     //         "name": "Diego",
-    //         "uuid": "48c55a16-c4e5-403c-a773-dcc8882e17a2",
     //         "age": 24,
     //     "geo": {
     //         "type": "Feature",
@@ -128,9 +128,17 @@
     //     },
     //         "friends": [
     //             {
+    //                 "_label": "test3",
     //                 "name": "Amanda",
     //                 "age": 18,
-    //                 "uuid": "d261c352-f112-4bd2-9217-886d6e25e6ff",
+    //                 "address": {
+    //                     "city": "birigui"
+    //                 },
+    //                 "interests": [{
+    //                     "name": "breaking bad"
+    //                 }, {
+    //                     "name": "medicine"
+    //                 }],
     //                 "dasdfsadf": {
     //                     "type": "Feature",
     //                     "properties": {},
@@ -144,9 +152,13 @@
     //                 }
     //             },
     //             {
+    //                 "_label": "test3",
     //                 "name": "Rafael",
     //                 "age": 34,
-    //                 "uuid": "683e3699-0e8c-4edc-81a4-f9b87e3ce24b",
+    //                 friends: {
+    //                     "_label": "test3",
+    //                     "name": "Achiles"
+    //                 },
     //                 "dddd": {
     //                     "type": "Feature",
     //                     "properties": {},
@@ -170,9 +182,21 @@
     //                     }
     //                 }
     //             }
-    //         ]
+    //         ],
+    //    "interests": [{
+    //        "name": "javascript"
+    //    }, {
+    //        "name": "game of thrones"
+    //    }]
     //     }, (err, results) => {
     //    console.log(err, results);
     //
     //})
+
+    geograph.list({
+        _label: 'test3',
+        _relations: [
+            'friends'
+        ]
+    }, (err, result) => console.log(err, _.map(result, 'friends')))
 })();
