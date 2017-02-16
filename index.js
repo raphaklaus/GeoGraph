@@ -195,19 +195,30 @@
 
             variables.push(identifies);
 
-            return `${identifies}:${relationship.split('-').join('|')}` ;
+            return `${identifies}:${relationship.split('-').join('|')}`;
         }
 
         function _addMatchRelationship(startVariable, relationshipString, statements) {
-            let relationships     = relationshipString.split('.');
+            let isOptional    = _.includes(relationshipString, '?'),
+                relationships = relationshipString.replace(/\?/g, '').split('.');
 
-            statements.cypher += `\nMATCH (${startVariable})`;
+            if (isOptional) {
+                statements.cypher += `\n OPTIONAL MATCH (${startVariable})`;
+            } else {
+                statements.cypher += `\n MATCH (${startVariable})`;
+            }
 
             _.each(relationships, (relationship) => {
                 let end = utils.getUniqueIdentifier();
+
                 statements.variables.push(end)
+
                 statements.cypher += `-[${_getRelationshipIdentifer(relationship, statements.variables)}]->(${end})`
             });
+
+            if (isOptional) {
+                statements.cypher += ` WITH ${statements.variables.join(',')}`
+            }
         }
 
         function _matchRelationships(startVariable, queryObject = {}, statements = {cypher: '', variables: []}) {
@@ -218,21 +229,22 @@
 
         function _listCypher(queryObject = {}) {
             let
-                statement = {
-                cypher: '',
-                variables: []
-            },
-                start = utils.getUniqueIdentifier(),
-                matchRelationshipsStatement = _matchRelationships(start, queryObject, statement);
+                statement                   = {
+                    cypher: '',
+                    variables: []
+                },
+                start                       = utils.getUniqueIdentifier();
 
             statement.variables.push(start);
 
-            statement.cypher = `MATCH (${start}:${queryObject._label})\n`+
+            let matchRelationshipsStatement = _matchRelationships(start, queryObject, statement);
+
+            statement.cypher = `MATCH (${start}:${queryObject._label}) WITH ${start}\n` +
                 `${matchRelationshipsStatement.cypher}\n` +
                 `RETURN ${statement.variables.join(',')}`;
 
             return statement.cypher;
-    }
+        }
 
         function _order(queryObject = {}) {
             let cypher = '';
@@ -318,12 +330,12 @@
             });
         }
 
-        function _parseResult(nodes, geometries) {
+        function _parseResult(nodes, geometries, queryObject) {
 
             let
                 indexedNodes      = {},
                 indexedGeometries = _.groupBy(geometries, 'node_uuid'),
-                hasRelationships = _.some(nodes, (node) => node.constructor.name == 'Relationship');
+                hasRelationships  = _.some(nodes, (node) => node.constructor.name == 'Relationship');
 
             let result = _.transform(nodes, function (accumulator, item) {
 
@@ -366,7 +378,7 @@
                         }
                     })
 
-                    if (hasRelationships && relationshipKeys.length || !hasRelationships) {
+                    if (_.includes(item.labels, queryObject._label)) {
                         accumulator[json.uuid] = json
                     }
 
@@ -386,6 +398,7 @@
             return _.chain(result.records)
                     .map('_fields')
                     .flattenDeep()
+                    .filter()
                     .value();
         }
 
