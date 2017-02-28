@@ -199,8 +199,7 @@
         }
 
         function _addMatchRelationship(start, relationshipString, statements) {
-            let isOptional    = _.includes(relationshipString, '?'),
-                relationships = relationshipString.split('.');
+            let relationships = relationshipString.split('.');
 
             _.each(relationships, (relationship) => {
                 let end = utils.getUniqueIdentifier(),
@@ -334,21 +333,19 @@
             });
         }
 
-        function _parseResult(nodes, geometries, queryObject) {
-
+        function _parseRow(row, geoemtries, queryObject) {
             let
                 indexedNodes      = {},
-                indexedGeometries = _.groupBy(geometries, 'node_uuid'),
-                hasRelationships  = _.some(nodes, (node) => node.constructor.name == 'Relationship');
+                indexedGeometries = _.groupBy(geometries, 'node_uuid');
 
-            let result = _.transform(nodes, function (accumulator, item) {
+            let result = _.transform(row, function (accumulator, item) {
 
                 if (item.constructor.name == 'Node') {
                     let json = item.properties;
 
                     indexedNodes[item.identity.low] = json;
 
-                    let relationships = _.chain(nodes)
+                    let relationships = _.chain(row)
                                          .filter((n) => n.constructor.name == 'Relationship' &&
                                          n.start.equals(item.identity))
                                          .groupBy('type')
@@ -369,7 +366,7 @@
                                                               n.constructor.name == 'Node';
                                                       });
 
-                                                      indexedNodes[node.identity] = node.properties;
+                                                      indexedNodes[node.identity.low] = node.properties;
 
                                                       return node.properties;
                                                   })
@@ -382,26 +379,89 @@
                         }
                     })
 
-                    if (_.includes(item.labels, queryObject._label)) {
-                        accumulator[json.uuid] = json
+                    if (queryObject._label || _.includes(item.labels, queryObject._label)) {
+                        accumulator.push(json)
                     }
-
 
                     _.each(indexedGeometries[json.uuid], (geometry) =>
                         json[geometry.node_key] =
                             turf.feature(geometry.node_geometry,
                                 geometry.properties));
                 }
-            }, {});
+            }, []);
 
-            return _.values(result);
+            console.log(result);
+
+        }
+
+        function _parseResult(nodes, geometries, queryObject) {
+
+            //let
+            //    indexedNodes      = {},
+            //    indexedGeometries = _.groupBy(geometries, 'node_uuid');
+            //
+            //let result = _.transform(nodes, function (accumulator, item) {
+            //
+            //    if (item.constructor.name == 'Node') {
+            //        let json = item.properties;
+            //
+            //        indexedNodes[item.identity.low] = json;
+            //
+            //        let relationships = _.chain(nodes)
+            //                             .filter((n) => n.constructor.name == 'Relationship' &&
+            //                             n.start.equals(item.identity))
+            //                             .groupBy('type')
+            //                             .value();
+            //
+            //        let relationshipKeys = _.keys(relationships);
+            //
+            //        _.each(relationshipKeys, (relationshipName) => {
+            //            json[relationshipName] = _.chain(relationships[relationshipName])
+            //                                      .map((r) => {
+            //
+            //                                          if (indexedNodes[r.end.low]) {
+            //                                              return indexedNodes[r.end.low];
+            //                                          }
+            //
+            //                                          let node = _.find(nodes, (n) => {
+            //                                              return r.end.equals(n.identity) &&
+            //                                                  n.constructor.name == 'Node';
+            //                                          });
+            //
+            //                                          indexedNodes[node.identity] = node.properties;
+            //
+            //                                          return node.properties;
+            //                                      })
+            //                                      .uniqBy('uuid')
+            //                                      .filter()
+            //                                      .value();
+            //
+            //            if (json[relationshipName].length == 1 && !json[relationshipName][0]._array) {
+            //                json[relationshipName] = json[relationshipName][0]
+            //            }
+            //        })
+            //
+            //        if (queryObject._label || _.includes(item.labels, queryObject._label)) {
+            //            accumulator[json.uuid] = json
+            //        }
+            //
+            //        _.each(indexedGeometries[json.uuid], (geometry) =>
+            //            json[geometry.node_key] =
+            //                turf.feature(geometry.node_geometry,
+            //                    geometry.properties));
+            //    }
+            //}, {});
+            //
+            //return _.values(result);
+
+            return _.map(nodes, (row) => _parseRow(row, geometries, queryObject))
         }
 
         function _flattenResult(result = {}) {
 
             return _.chain(result.records)
                     .map('_fields')
-                    .flattenDeep()
+                    //.flattenDeep()
                     .filter()
                     .value();
         }
