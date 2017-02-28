@@ -205,7 +205,7 @@
                 let end = utils.getUniqueIdentifier(),
                     isOptional    = _.startsWith(relationship, '?');
 
-                statements.variables.push(end)
+                statements.endVariables.push(end)
 
                 if (isOptional) {
                     relationship = relationship.substring(1);
@@ -214,10 +214,10 @@
                     statements.cypher += `\n MATCH (${start})`;
                 }
 
-                statements.cypher += `-[${_getRelationshipIdentifer(relationship, statements.variables)}]->(${end})`
+                statements.cypher += `-[${_getRelationshipIdentifer(relationship, statements.relationshipVariables)}]->(${end})`
 
                 if (isOptional) {
-                    statements.cypher += ` WITH ${statements.variables.join(',')}`
+                    statements.cypher += ` WITH ${statements.variables.concat(statements.relationshipVariables).concat(statements.endVariables).join(',')}`
                 }
 
                 start = end;
@@ -234,7 +234,9 @@
             let
                 statement = {
                     cypher: '',
-                    variables: []
+                    variables: [],
+                    relationshipVariables: [],
+                    endVariables: []
                 },
                 start     = utils.getUniqueIdentifier();
 
@@ -244,7 +246,8 @@
 
             statement.cypher = `MATCH (${start}:${queryObject._label}) WITH ${start}\n` +
                 `${matchRelationshipsStatement.cypher}\n` +
-                `RETURN ${statement.variables.join(',')}`;
+                `RETURN ${statement.variables.join(',')}, ${_.map(statement.endVariables, (v) => 'collect(' + v + ')' )},
+${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')' )}`;
 
             return statement.cypher;
         }
@@ -333,17 +336,23 @@
             });
         }
 
-        function _parseRow(row, geoemtries, queryObject) {
+        function _parseRow(row, geometries, queryObject) {
             let
                 indexedNodes      = {},
                 indexedGeometries = _.groupBy(geometries, 'node_uuid');
+
+            row = _.chain(row)
+                   .filter()
+                   .flattenDeep()
+                   .uniqBy('identity.low')
+                   .value()
 
             let result = _.transform(row, function (accumulator, item) {
 
                 if (item.constructor.name == 'Node') {
                     let json = item.properties;
 
-                    indexedNodes[item.identity.low] = json;
+                    indexedNodes[item.identity.low] = item;
 
                     let relationships = _.chain(row)
                                          .filter((n) => n.constructor.name == 'Relationship' &&
@@ -358,15 +367,16 @@
                                                   .map((r) => {
 
                                                       if (indexedNodes[r.end.low]) {
-                                                          return indexedNodes[r.end.low];
+                                                          indexedNodes[r.end.low]._related = true;
+                                                          return indexedNodes[r.end.low].properties;
                                                       }
 
-                                                      let node = _.find(nodes, (n) => {
-                                                          return r.end.equals(n.identity) &&
-                                                              n.constructor.name == 'Node';
-                                                      });
+                                                      let node = _.find(row, (n) =>
+                                                        r.end.equals(n.identity) && n.constructor.name == 'Node');
 
-                                                      indexedNodes[node.identity.low] = node.properties;
+                                                      indexedNodes[node.identity.low] = node;
+
+                                                      node._related = true;
 
                                                       return node.properties;
                                                   })
@@ -379,7 +389,7 @@
                         }
                     })
 
-                    if (queryObject._label || _.includes(item.labels, queryObject._label)) {
+                    if ( (!queryObject._label || _.includes(item.labels, queryObject._label)) && !item._related) {
                         accumulator.push(json)
                     }
 
@@ -390,7 +400,7 @@
                 }
             }, []);
 
-            console.log(result);
+            return _.first(result);
 
         }
 
