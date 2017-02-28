@@ -194,10 +194,10 @@
     //})
 
     geograph.list({
-        _label: 'test3',
+        _label: 'test4',
         _relations: [
-            '?friends.interests-address',
+            '?friends.?interests-address',
             '?interests',
         ]
-    }, (err, result) => console.log(err, result))
+    }, (err, result) => console.log(err, JSON.stringify(result)))
 })();

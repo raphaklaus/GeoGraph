@@ -198,27 +198,31 @@
             return `${identifies}:${relationship.split('-').join('|')}`;
         }
 
-        function _addMatchRelationship(startVariable, relationshipString, statements) {
+        function _addMatchRelationship(start, relationshipString, statements) {
             let isOptional    = _.includes(relationshipString, '?'),
-                relationships = relationshipString.replace(/\?/g, '').split('.');
-
-            if (isOptional) {
-                statements.cypher += `\n OPTIONAL MATCH (${startVariable})`;
-            } else {
-                statements.cypher += `\n MATCH (${startVariable})`;
-            }
+                relationships = relationshipString.split('.');
 
             _.each(relationships, (relationship) => {
-                let end = utils.getUniqueIdentifier();
+                let end = utils.getUniqueIdentifier(),
+                    isOptional    = _.startsWith(relationship, '?');
 
                 statements.variables.push(end)
 
-                statements.cypher += `-[${_getRelationshipIdentifer(relationship, statements.variables)}]->(${end})`
-            });
+                if (isOptional) {
+                    relationship = relationship.substring(1);
+                    statements.cypher += `\n OPTIONAL MATCH (${start})`;
+                } else {
+                    statements.cypher += `\n MATCH (${start})`;
+                }
 
-            if (isOptional) {
-                statements.cypher += ` WITH ${statements.variables.join(',')}`
-            }
+                statements.cypher += `-[${_getRelationshipIdentifer(relationship, statements.variables)}]->(${end})`
+
+                if (isOptional) {
+                    statements.cypher += ` WITH ${statements.variables.join(',')}`
+                }
+
+                start = end;
+            });
         }
 
         function _matchRelationships(startVariable, queryObject = {}, statements = {cypher: '', variables: []}) {
@@ -229,11 +233,11 @@
 
         function _listCypher(queryObject = {}) {
             let
-                statement                   = {
+                statement = {
                     cypher: '',
                     variables: []
                 },
-                start                       = utils.getUniqueIdentifier();
+                start     = utils.getUniqueIdentifier();
 
             statement.variables.push(start);
 
