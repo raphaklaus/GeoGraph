@@ -23,12 +23,6 @@
     function getUniqueIdentifier() {
         //65-90 97-122
 
-        // aumentar o primeiro indice
-        // se o indice for maior que o length de chars, zerar o primeiro indice e aumentar o segundo indice
-        // se o segundo indice for maior que o length de chars, zerar ambos os indices
-
-
-
         indexes[0]++;
 
         if (indexes[0] >= chars.length) {

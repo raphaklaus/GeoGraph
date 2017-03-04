@@ -1,6 +1,7 @@
 (function () {
     'use strict';
 
+
     const
         _            = require('lodash'),
         turf         = require('turf'),
@@ -34,10 +35,6 @@
             });
         }
 
-        if (config.elasticsearch) {
-            es = new elasticsearch.Client(config.elasticsearch)
-        }
-
         this.pg = pg;
         this.db = db;
         this.es = es;
@@ -51,8 +48,8 @@
 
         function _isArrayOfPrimitives(array) {
             return array && !_.isEmpty(array) && _.isArray(array) && _.every(array, (value) => {
-                    return !_.isObject(value) && !_.isUuid(value);
-                });
+                return !_.isObject(value) && !_.isUuid(value);
+            });
         }
 
         function _executeStatement(query, transaction, callback) {
@@ -65,7 +62,7 @@
                     .reject((key) => _isGeoJSON(node[key]) || (_.isArray(node[key]) && !_isArrayOfPrimitives(node[key]))
                     || _.isObject(node[key]) || key == '_label')
                     .transform((result, next) => result[next] = node[next], {})
-                    .value()
+                    .value();
         }
 
         function _isNeo4jNode(node) {
@@ -74,7 +71,7 @@
 
         function _getMatchQuery(node, id, params, options = {}) {
 
-            let cypher = `\nMATCH (${id} {uuid: $${id}.uuid})`
+            let cypher = `\nMATCH (${id} {uuid: $${id}.uuid})`;
             if (options.update) {
                 let update = _.chain(node)
                               .keys()
@@ -82,7 +79,7 @@
                               .value();
 
                 if (update.length) {
-                    cypher += ' SET ' + update.join(', ')
+                    cypher += ' SET ' + update.join(', ');
                 }
 
                 params[id] = node;
@@ -103,13 +100,13 @@
                     statement.cypher += _getMatchQuery(relatedNode, relatedId, statement.params, options);
                     statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId})`;
                 } else {
-                    value.uuid = uuid
+                    value.uuid = uuid;
 
                     relatedNode.uuid = uuid;
 
                     if (value._label) {
-                        let label = value._label.split(/\s/)[0]
-                        statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId}:${label} $${relatedId})`
+                        let label = value._label.split(/\s/)[0];
+                        statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId}:${label} $${relatedId})`;
                     } else {
                         statement.cypher += `\nCREATE UNIQUE (${id})-[:${key}]->(${relatedId} $${relatedId})`;
                     }
@@ -133,7 +130,7 @@
                  if (_.isArray(value)) {
                      _.each(value, (item) => _createRelationshipCypher(item, key, id, statement, relatedNodes, options));
                  } else {
-                     _createRelationshipCypher(value, key, id, statement, relatedNodes, options)
+                     _createRelationshipCypher(value, key, id, statement, relatedNodes, options);
                  }
              })
              .value();
@@ -157,7 +154,7 @@
                 };
 
             if (_.isUuid(graph.uuid)) {
-                statement.cypher = _getMatchQuery(node, id, statement.params, options)
+                statement.cypher = _getMatchQuery(node, id, statement.params, options);
             } else {
                 graph.uuid = uuid;
 
@@ -182,11 +179,11 @@
             let cypher = '\n';
 
             if (queryObject._skip) {
-                cypher += `SKIP ${queryObject._skip}\n`
+                cypher += `SKIP ${queryObject._skip}\n`;
             }
 
             if (queryObject._take) {
-                cypher += `LIMIT ${queryObject._take}\n`
+                cypher += `LIMIT ${queryObject._take}\n`;
             }
 
             return cypher;
@@ -207,7 +204,7 @@
                 let end        = utils.getUniqueIdentifier(),
                     isOptional = _.startsWith(relationship, '?');
 
-                statements.endVariables.push(end)
+                statements.endVariables.push(end);
 
                 if (isOptional) {
                     relationship = relationship.substring(1);
@@ -219,14 +216,14 @@
                 let filter = _.last(filterRegex.exec(relationship));
 
                 statements.cypher += `-[${_getRelationshipIdentifer(filterRegex.exec(relationship)[1],
-                    statements.relationshipVariables)}]->(${end})`
+                    statements.relationshipVariables)}]->(${end})`;
 
                 if (filter) {
                     statements.cypher += ` WHERE ${end}.${filter}`;
                 }
 
                 if (isOptional) {
-                    statements.cypher += ` WITH ${statements.variables.concat(statements.relationshipVariables).concat(statements.endVariables).join(',')}`
+                    statements.cypher += ` WITH ${statements.variables.concat(statements.relationshipVariables).concat(statements.endVariables).join(',')}`;
                 }
 
                 start = end;
@@ -263,14 +260,6 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
             return statement.cypher;
         }
 
-        function _order(queryObject = {}) {
-            let cypher = '';
-
-            if (queryObject._order) {
-
-            }
-        }
-
         function _getSql(graph, statements) {
             statements = statements || [];
 
@@ -283,27 +272,27 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
 
                      if (_isGeoJSON(value)) {
                          statement.sql    = 'INSERT INTO geometries (node_uuid, node_key, node_geometry)\n';
-                         statement.sql += 'values ( :uuid, :key, :geometry) ON CONFLICT ON CONSTRAINT uuid_key_unique\n'
-                         statement.sql += 'DO UPDATE SET node_geometry = :geometry'
+                         statement.sql += 'values ( :uuid, :key, :geometry) ON CONFLICT ON CONSTRAINT uuid_key_unique\n';
+                         statement.sql += 'DO UPDATE SET node_geometry = :geometry';
                          statement.params = {
                              uuid: graph.uuid,
                              key: key,
                              geometry: wkt.convert(value.geometry)
-                         }
+                         };
 
                          statements.push(statement);
                      } else if (_.isArray(value)) {
                          _.each(value, (item) => _getSql(item, statements));
                      } else if (!value) {
-                         statement.sql    = 'DELETE FROM geometries where node_uuid = :uuid and node_key = :key'
+                         statement.sql    = 'DELETE FROM geometries where node_uuid = :uuid and node_key = :key';
                          statement.params = {
                              uuid: graph.uuid,
                              key: key
-                         }
+                         };
 
                          statements.push(statement);
                      } else {
-                         _getSql(value, statements)
+                         _getSql(value, statements);
                      }
                  })
                  .value();
@@ -314,7 +303,7 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
 
         function _get(neo4jStatement, queryObject, callback) {
             if (typeof queryObject == 'function' && !callback) {
-                callback = queryObject
+                callback = queryObject;
             }
 
             let tasks = [
@@ -333,10 +322,10 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
                                                    .value())
                             .select('node_uuid', 'node_key', 'properties',
                                 pg.raw('ST_AsGeoJSON(node_geometry)::json as node_geometry'))
-                            .asCallback((err, geometries) => callback(err, nodes, geometries))
+                            .asCallback((err, geometries) => callback(err, nodes, geometries));
 
                     }
-                )
+                );
             }
 
             async.waterfall(tasks, function (err, nodes, geometries) {
@@ -357,7 +346,7 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
                    .filter()
                    .flattenDeep()
                    .uniqBy('identity.low')
-                   .value()
+                   .value();
 
             let result = _.transform(row, function (accumulator, item) {
 
@@ -397,12 +386,12 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
                                                   .value();
 
                         if (json[relationshipName].length == 1 && !json[relationshipName][0]._array) {
-                            json[relationshipName] = json[relationshipName][0]
+                            json[relationshipName] = json[relationshipName][0];
                         }
-                    })
+                    });
 
                     if ((!queryObject._label || _.includes(item.labels, queryObject._label)) && !item._related) {
-                        accumulator.push(json)
+                        accumulator.push(json);
                     }
 
                     _.each(indexedGeometries[json.uuid], (geometry) =>
@@ -476,7 +465,7 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
             //
             //return _.values(result);
 
-            return _.map(nodes, (row) => _parseRow(row, geometries, queryObject))
+            return _.map(nodes, (row) => _parseRow(row, geometries, queryObject));
         }
 
         function _flattenResult(result = {}) {
@@ -514,7 +503,7 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
 
             if (typeof options == 'function' && !callback) {
                 callback = options;
-                options  = {}
+                options  = {};
             }
 
             let handler;
@@ -526,17 +515,17 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
                     } else {
                         callback(null, result);
                     }
-                }
+                };
             } else {
                 handler = (err, result, callback) => {
                     callback(err, result);
-                }
+                };
             }
 
             async.map(graphs, (graph, callback) => {
                 let transactions = {
                     tx: db.beginTransaction()
-                }
+                };
 
                 let neo4jStatement = _getCypher(graph, {update: true}),
                     sqlStatements  = _getSql(graph),
@@ -557,7 +546,7 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
                                       .transacting(pgTrx)
                                       .asCallback(callback), callback);
                             })
-                    )
+                    );
                 }
                 async.series(tasks, (err) => {
                     if (err) {
@@ -568,44 +557,44 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
                 });
             }, (err, results) => {
                 if (graphs.length > 1) {
-                    callback(err, results)
+                    callback(err, results);
                 } else {
-                    callback(err, _.first(results))
+                    callback(err, _.first(results));
                 }
             });
 
-        }
+        };
 
         this.getById = function (uuid, queryObject, callback) {
 
             if (typeof queryObject == 'function' && !callback) {
-                callback = queryObject
+                callback = queryObject;
             }
 
             _get({
-                cypher: `MATCH (a {uuid: $uuid})` +
+                cypher: 'MATCH (a {uuid: $uuid})' +
                 'WITH a MATCH (a)-[r*0..]->(b)\n' +
                 'RETURN collect(b), collect(r)',
                 params: {
                     uuid: uuid
                 }
             }, queryObject, (err, result) => {
-                callback(err, _.first(result))
+                callback(err, _.first(result));
             });
-        }
+        };
 
         this.list = function (queryObject, callback) {
 
             if (typeof queryObject == 'function' && !callback) {
-                callback = queryObject
+                callback = queryObject;
             }
 
-            let cypher = _listCypher(queryObject)
+            let cypher = _listCypher(queryObject);
 
             _get({
                 cypher
             }, queryObject, callback);
-        }
+        };
 
         this.deleteNodes = function (uuids, callback) {
 
@@ -631,19 +620,19 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
                                 .whereIn('node_uuid', uuids)
                                 .transacting(transactions.pgTrx)
                                 .delete()
-                                .asCallback(callback)
+                                .asCallback(callback);
                         })
-                )
+                );
             }
 
             async.parallel(tasks, (err) => {
                 if (err) {
-                    _rollbackTransactions(transactions, err, callback)
+                    _rollbackTransactions(transactions, err, callback);
                 } else {
-                    _commitTransactions(transactions, null, callback)
+                    _commitTransactions(transactions, null, callback);
                 }
             });
-        }
+        };
 
         this.deleteRelationships = function (relationships, callback) {
             _executeStatement({
@@ -656,6 +645,6 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
                     relationshipName: _.map(relationships, 'relationship')
                 }
             }, callback);
-        }
-    }
+        };
+    };
 })();
