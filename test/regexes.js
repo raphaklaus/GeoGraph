@@ -77,8 +77,8 @@ describe('Regexes', () => {
 
     it('should return undefined when does not find a match on getGroup', () => {
         let string = 'dummy string',
-            where = regexes.where.getGroup(string),
-            pagination = regexes.pagination.getGroup(string);
+            where = regexes.where.getGroup(string, 'where'),
+            pagination = regexes.pagination.getGroup(string, 'pagination');
 
         expect(where).to.be.undefined;
         expect(pagination).to.be.undefined;
@@ -121,5 +121,21 @@ describe('Regexes', () => {
         expect(pagination).to.have.property('limit', '15');
     })
     
+    it('should get label', () => {
+        let group = regexes.label.getGroup('validLabel', 'label');
 
+        expect(group).to.be.equal('validLabel');
+    })
+
+    it('should validate label starting with numbers', () => {
+        let group = regexes.label.getGroup('12invalidLabel', 'label');
+
+        expect(group).to.be.undefined;
+    })
+
+    it('should validate label with spaces', () => {
+        let group = regexes.label.getGroup('invalid label', 'label');
+
+        expect(group).to.be.undefined;
+    })
 })
