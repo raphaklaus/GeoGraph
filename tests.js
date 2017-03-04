@@ -2,20 +2,21 @@
     "use strict";
 
     const
-        _             = require('lodash'),
-        async         = require('async'),
-        turf          = require('turf'),
-        GeoGraph      = require('./index'),
-        geographUtils = require('./utils'),
-        geograph      = new GeoGraph({
-            neo4j: 'http://localhost:7474',
-            pg: {
-                host: 'localhost',
-                user: 'postgres',
-                password: 'postgres',
-                database: 'like_u'
-            }
-        });
+        manager = require('./neo4j_manager'),
+        //_             = require('lodash'),
+        async         = require('async');
+        //turf          = require('turf'),
+        //GeoGraph      = require('./index'),
+        //geographUtils = require('./utils'),
+        //geograph      = new GeoGraph({
+        //    neo4j: 'http://localhost:7474',
+        //    pg: {
+        //        host: 'localhost',
+        //        user: 'postgres',
+        //        password: 'postgres',
+        //        database: 'like_u'
+        //    }
+        //});
 
     //geographUtils.intializePostgres(geograph.pg, function (err) {
     //    console.log(err)
@@ -193,11 +194,51 @@
     //
     //})
 
-    geograph.list({
-        _label: 'test4',
-        _relations: [
-            '?friends.?interests-address-friends',
-            '?interests',
-        ]
-    }, (err, result) => console.log(err, JSON.stringify(result)))
+    //geograph.list({
+    //    _label: 'test4',
+    //    _where: 'name = "Diego" OR ',
+    //    _relations: [
+    //        '?friends.?interests-address-friends',
+    //        '?interests'
+    //    ]
+    //}, (err, result) => console.log(err, JSON.stringify(result)))
+
+
+    let driver = new manager({
+        host: 'localhost'
+    });
+    //
+    //driver.query('MATCH (n) DETACH DELETE n', {}, (err) => {
+    //    console.log(err);
+    //    console.log('cabou')
+    //})
+
+    //var count = 0;
+    //const random = require('generate-random-data')
+    //async.whilst(
+    //    function() { return count <= 1000000; },
+    //    function(callback) {
+    //        count++;
+    //        driver.query('CREATE (n:Person $n)', {
+    //            n: {
+    //                firstName: random.bool()? random.maleFirstName() : random.femaleFirstName(),
+    //                lastName: random.lastName(),
+    //                age: random.natural(),
+    //                uuid: random.guid(),
+    //            }
+    //        }, callback);
+    //    },
+    //    function (err) {
+    //        console.log(err, 'cabou');
+    //    }
+    //)
+
+    console.time('tick tack')
+    driver.query('PROFILE MATCH (n:Person {lastName: "Smith"}) return n', undefined, function (err, results) {
+        console.timeEnd('tick tack');
+        console.log(err);
+        console.log(results.records.length)
+        console.log(results.summary.profile)
+    })
+
 })();

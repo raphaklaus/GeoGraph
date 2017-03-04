@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "istanbul cover node_modules/.bin/_mocha -- -- -u exports -R spec test/**/*"
   },
   "repository": {
     "type": "git",
@@ -26,6 +26,11 @@
     "pg": "^6.1.2",
     "terraformer-wkt-parser": "^1.1.2",
     "turf": "^3.0.14",
-    "uuid": "^3.0.1"
+    "uuid": "^3.0.1",
+    "xregexp": "^3.1.1"
+  },
+  "devDependencies": {
+    "chai": "^3.5.0",
+    "mocha": "^3.2.0"
   }
 }

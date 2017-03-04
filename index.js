@@ -13,6 +13,8 @@
 
     _.mixin(require('lodash-uuid'));
 
+    let filterRegex = /([\w-]+)?(\[(.+)\])?/;
+
 
     module.exports = function (config) {
 
@@ -202,8 +204,8 @@
             let relationships = relationshipString.split('.');
 
             _.each(relationships, (relationship) => {
-                let end = utils.getUniqueIdentifier(),
-                    isOptional    = _.startsWith(relationship, '?');
+                let end        = utils.getUniqueIdentifier(),
+                    isOptional = _.startsWith(relationship, '?');
 
                 statements.endVariables.push(end)
 
@@ -214,7 +216,14 @@
                     statements.cypher += `\n MATCH (${start})`;
                 }
 
-                statements.cypher += `-[${_getRelationshipIdentifer(relationship, statements.relationshipVariables)}]->(${end})`
+                let filter = _.last(filterRegex.exec(relationship));
+
+                statements.cypher += `-[${_getRelationshipIdentifer(filterRegex.exec(relationship)[1],
+                    statements.relationshipVariables)}]->(${end})`
+
+                if (filter) {
+                    statements.cypher += ` WHERE ${end}.${filter}`;
+                }
 
                 if (isOptional) {
                     statements.cypher += ` WITH ${statements.variables.concat(statements.relationshipVariables).concat(statements.endVariables).join(',')}`
@@ -244,10 +253,12 @@
 
             let matchRelationshipsStatement = _matchRelationships(start, queryObject, statement);
 
-            statement.cypher = `MATCH (${start}:${queryObject._label}) WITH ${start}\n` +
+            statement.cypher = `MATCH (${start}:${queryObject._label})` +
+                `${queryObject._where? ' WHERE ' + start + '.' + queryObject._where : ''} ` +
+                `${_paginate(queryObject)} WITH ${start}\n` +
                 `${matchRelationshipsStatement.cypher}\n` +
-                `RETURN ${statement.variables.join(',')}, ${_.map(statement.endVariables, (v) => 'collect(' + v + ')' )},
-${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')' )}`;
+                `RETURN ${start}, ${_.map(statement.endVariables, (v) => 'collect(' + v + ')')},
+${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')')}`;
 
             return statement.cypher;
         }
@@ -316,6 +327,7 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')' )}`;
                     (nodes, callback) => {
                         pg('geometries')
                             .whereIn('node_uuid', _.chain(nodes)
+                                                   .flattenDeep()
                                                    .filter((item) => item.constructor.name == 'Node')
                                                    .map('properties.uuid')
                                                    .value())
@@ -372,7 +384,7 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')' )}`;
                                                       }
 
                                                       let node = _.find(row, (n) =>
-                                                        r.end.equals(n.identity) && n.constructor.name == 'Node');
+                                                      r.end.equals(n.identity) && n.constructor.name == 'Node');
 
                                                       indexedNodes[node.identity.low] = node;
 
@@ -389,7 +401,7 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')' )}`;
                         }
                     })
 
-                    if ( (!queryObject._label || _.includes(item.labels, queryObject._label)) && !item._related) {
+                    if ((!queryObject._label || _.includes(item.labels, queryObject._label)) && !item._related) {
                         accumulator.push(json)
                     }
 
@@ -471,7 +483,6 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')' )}`;
 
             return _.chain(result.records)
                     .map('_fields')
-                    //.flattenDeep()
                     .filter()
                     .value();
         }
@@ -590,7 +601,6 @@ ${_.map(statement.relationshipVariables, (v) => 'collect(' + v + ')' )}`;
             }
 
             let cypher = _listCypher(queryObject)
-            console.log(cypher)
 
             _get({
                 cypher
