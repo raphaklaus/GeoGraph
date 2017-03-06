@@ -46,6 +46,13 @@ describe('Regexes', () => {
         expect(group).to.be.equal('property="value" AND otherProperty IS NULL OR anotherProperty = 25');
     });
 
+    it('should add string to each filter', () => {
+        let filtersString = 'property="value" AND otherProperty IS NULL OR anotherProperty = 25',
+            newFilterString = filtersString.replace(regexes.propertyFilter, 'test.$1');
+
+        expect(newFilterString).to.be.equal('test.property="value" AND test.otherProperty IS NULL OR test.anotherProperty = 25');
+    });
+
     it('should parse skip', () => {
 
         let groups = regexes.paginate.groups('skip=10');
