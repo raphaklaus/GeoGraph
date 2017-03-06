@@ -1,5 +1,6 @@
 const
     _ = require('lodash'),
+    uuid = require('uuid'),
     expect = require('chai').expect,
     statements = require('../lib/utils/statement'),
     GeoGraphValidationError = require('../lib/errors/geograph_validation_error');
@@ -12,9 +13,13 @@ describe('Statements', () => {
 
     let
         createRegex = 'CREATE \\(\\w+:\\w+ \\$\\w+\\)\\s',
-        createRelationshipRegex = 'CREATE UNIQUE \\(\\w+\\)-\\[:\\w+\\]->\\(\\w+:\\w+ \\$\\w+\\)\\s';
-    it('should create simple create cypher query', () => {
-        let statement = statements.getCreateCypher({
+        createRelationshipRegex = 'CREATE UNIQUE \\(\\w+\\)-\\[:\\w+\\]->\\(\\w+:\\w+ \\$\\w+\\)\\s',
+        matchRegex = 'MATCH \\(\\w+ \\{\\w+: \\$\\w+\\}\\)',
+        matchRelationshipRegex = 'MATCH \\(\\w+\\)-\\[\\w+\\*0\\.\\.\\]->\\(\\w+\\)';
+        //MATCH (a {uuid: $uuid}) MATCH (a)-[r*0..]->(b)
+
+    it('should create statement query for simple node', () => {
+        let statement = statements.create({
             _label: 'test',
             name: 'name test'
         });
@@ -26,10 +31,10 @@ describe('Statements', () => {
         expect(params).to.have.property('name', 'name test');
     });
 
-    it('should create simple create cypher query with multiple properties', () => {
+    it('should create statement query for node with multiple properties', () => {
         let
             date = new Date(),
-            statement = statements.getCreateCypher({
+            statement = statements.create({
                 _label: 'test',
                 name: 'name test',
                 numericProperty: 123,
@@ -47,8 +52,8 @@ describe('Statements', () => {
         expect(params).to.have.property('dateProperty', date.valueOf());
     });
 
-    it('shoud create cypher query with multiple relationships', () => {
-        let statement = statements.getCreateCypher({
+    it('shoud create statement query with multiple relationships', () => {
+        let statement = statements.create({
             _label: 'test',
             name: 'name test',
             relation: {
@@ -77,8 +82,8 @@ describe('Statements', () => {
         expect(statement.cypher).to.match(new RegExp(`${createRegex}(${createRelationshipRegex}){3}`));
     });
 
-    it('should create multiple relationships with multiple dephts', () => {
-        let statement = statements.getCreateCypher({
+    it('should create statement query with multiple relationships and multiple dephts', () => {
+        let statement = statements.create({
             _label: 'test',
             name: 'name test',
             relation: {
@@ -115,47 +120,80 @@ describe('Statements', () => {
             property: 'value'
         };
 
-        expect(() => statements.getCreateCypher(json)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${json}`);
+        expect(() => statements.create(json)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${json}`);
     });
 
     it('should throw error when trying to insert node with invalid label', () => {
 
-        let json = {
-            _label: '12label',
-            property: 'value'
-        };
-
-        expect(() => statements.getCreateCypher(json)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${json}`);
-    });
-
-    it('shoud throw error when trying to insert relationship without label', () => {
         let
-            relation = {
+            relation1 = {
                 property: 'value'
             },
-            json = {
-                _label: 'test',
-                property: true,
-                relation: relation
-            };
-
-        expect(() => statements.getCreateCypher(json)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${relation}`);
-    });
-
-    it('shoud throw error when trying to insert deep relationship without label', () => {
-        let
-            relation = {
-                property: 'value'
-            },
-            json = {
+            json1 = {
                 _label: 'test',
                 property: true,
                 relation: {
                     _label: 'test',
-                    subRelation: relation
+                    property: 123,
+                    subRelation: relation1
                 }
             };
 
-        expect(() => statements.getCreateCypher(json)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${relation}`);
+        let
+            relation2 = {
+                property: 'value'
+            },
+            json2 = {
+                _label: 'test',
+                property: true,
+                relation: relation2
+            };
+
+        let json3 = {
+            _label: '12label',
+            property: 'value'
+        };
+
+        expect(() => statements.create(json1)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${relation1}`);
+        expect(() => statements.create(json2)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${relation2}`);
+        expect(() => statements.create(json3)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${json3}`);
+    });
+
+    it('should throw error when trying to insert empty node', () => {
+        let
+            json1 = {},
+            json2 = {
+                _label: 'test'
+            },
+            json3 = {
+                _label: 'test',
+                name: 'name',
+                relation: {}
+            },
+            json4 = {
+                _label: 'test',
+                name: 'name',
+                relation: {
+                    _label: 'test2',
+                    property: 'value',
+                    relation: {}
+                }
+            };
+
+        expect(() => statements.create(json1)).to.throw(GeoGraphValidationError, 'you cannot insert an empty node');
+        expect(() => statements.create(json2)).to.throw(GeoGraphValidationError, 'you cannot insert an empty node');
+        expect(() => statements.create(json3)).to.throw(GeoGraphValidationError, 'you cannot insert an empty node');
+        expect(() => statements.create(json4)).to.throw(GeoGraphValidationError, 'you cannot insert an empty node');
+    });
+
+    it('should return findById statement', () => {
+        let statement = statements.findById(uuid.v4());
+
+        expect(statement.cypher).to.match(new RegExp(`${matchRegex}\\sWITH \\w+ ${matchRelationshipRegex}\\sRETURN collect\\(\\w+\\), collect\\(\\w+\\)`));
+    });
+
+    it('should throw error when trying to find by invalid uuid', () => {
+        expect(() => statements.findById()).to.throw(GeoGraphValidationError, 'you must provide a valid uuid');
+        expect(() => statements.findById('asdfsadf')).to.throw(GeoGraphValidationError, 'you must provide a valid uuid');
     });
 });
