@@ -388,7 +388,7 @@ describe('Statements', () => {
                 cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('-').length - 1)}`;
 
                 if (_.includes(relation, '[')) {
-                    cypherRegexString += `\\s${getWhereCypherRegex((relation.match(regexes.booleanOperators) || [null]).length -1)}`;
+                    cypherRegexString += `\\s${getWhereCypherRegex((relation.match(regexes.booleanOperators) || [null]).length - 1)}`;
                 }
 
                 cypherRegexString += `\\s${getWithCypherRegex(num)}\\s`;
@@ -402,5 +402,24 @@ describe('Statements', () => {
         cypherRegexString += `${getEndCypherRegex(num + num - 2)}$`;
 
         expect(statement.cypher).to.match(new RegExp(cypherRegexString));
+    });
+
+    it('should validate queryObject', () => {
+        let
+            queryObject1 = {},
+            queryObject2 = {
+                label: 'test',
+                relations: [
+                    '..'
+                ]
+            },
+            queryObject3 = {
+                label: 'test',
+                relations: 'lasdf'
+            };
+
+        expect(() => statements.find(queryObject1)).to.throw(GeoGraphValidationError, 'You must provide a label to start the search');
+        expect(() => statements.find(queryObject2)).to.throw(GeoGraphValidationError, 'You must provide the name of the relationship');
+        expect(() => statements.find(queryObject3)).to.throw(GeoGraphValidationError, 'relations must be an array');
     });
 });
