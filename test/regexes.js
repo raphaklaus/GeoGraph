@@ -126,6 +126,30 @@ describe('Regexes', () => {
         expect(group4).to.be.undefined;
     });
 
+    it('should extract relation string', () => {
+        let group = regexes.relation.getGroup('rel', 'relation');
+
+        expect(group).to.be.equal('rel');
+    });
+
+    it('should extract relation string with filters', () => {
+        let group = regexes.relation.getGroup('rel[property="value"]{skip=10}', 'relation');
+
+        expect(group).to.be.equal('rel');
+    });
+
+    it('should return falsy if the relation string is not and the beginning', () => {
+        let group = regexes.relation.getGroup('[property="value"]{skip=10}rel', 'relation');
+
+        expect(group).to.not.be.ok;
+    });
+
+    it('should return falsy if there is no relation string', () => {
+        let group = regexes.relation.getGroup('[property="value"]{skip=10}', 'relation');
+
+        expect(group).to.not.be.ok;
+    });
+
     it('should parse a complex filter string', () => {
         let string = 'relation[name = "Doge" AND age > 100 AND age < 200 OR name<>"WoW "' +
         'OR quantity >=50 AND otherProperty<= 155 OR property IS NOT NULL AND ' +
