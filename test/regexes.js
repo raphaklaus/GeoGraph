@@ -126,6 +126,17 @@ describe('Regexes', () => {
         expect(group4).to.be.undefined;
     });
 
+    it('should validate relationship name', () => {
+        let 
+            group1 = regexes.relation.getGroup('12invalid', 'labrelationel'),
+            group2 = regexes.relation.getGroup(undefined, 'relation'),
+            group3 = regexes.relation.getGroup('', 'relation');
+
+        expect(group1).to.be.undefined;
+        expect(group2).to.be.undefined;
+        expect(group3).to.be.undefined;
+    });
+
     it('should extract relation string', () => {
         let group = regexes.relation.getGroup('rel', 'relation');
 
