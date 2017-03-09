@@ -1,5 +1,5 @@
 (function () {
-    "use strict";
+    'use strict';
 
     const
         neo4j   = require('neo4j-driver').v1,
@@ -16,11 +16,11 @@
                     callback(null, ...arguments);
                 }, function (err) {
                     callback(err);
-                })
+                });
             } else {
-                return fn.apply(source, arguments)
+                return fn.apply(source, arguments);
             }
-        }
+        };
     }
 
     function Transaction(session, trx) {
@@ -38,8 +38,8 @@
                     .finally(() => {
                         session.close();
                     })
-        }
-    };
+        };
+    }
 
     function Session(session) {
         session.run = nodeify(session, session.run);
@@ -78,7 +78,7 @@
 
         this.beginTransaction = beginTransaction;
         this.query            = query;
-    }
+    };
 
 
 })();
