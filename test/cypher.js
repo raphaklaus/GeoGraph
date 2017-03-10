@@ -448,21 +448,21 @@ describe('Cypher', () => {
     it('should return statement to delete nodes by id', () => {
         let
             uuid = node_uuid.v4(),
-            statement1 = statements.deleteNodesByIds('Test',[uuid]),
-            statement2 = statements.deleteNodesByIds('Test', uuid);
+            statement1 = statements.deleteNodesById('Test',[uuid]),
+            statement2 = statements.deleteNodesById('Test', uuid);
 
-        expect(statement1.cypher).to.be.equal('MATCH (n:Test) where n.uuid in $uuids DETACH DELETE n');
+        expect(statement1.cypher).to.be.equal('MATCH (n:Test) where n.uuid in $uuids DETACH DELETE n RETURN n');
         expect(statement1.params).to.be.deep.equal({
             uuids: [uuid]
         });
-        expect(statement2.cypher).to.be.equal('MATCH (n:Test) where n.uuid in $uuids DETACH DELETE n');
+        expect(statement2.cypher).to.be.equal('MATCH (n:Test) where n.uuid in $uuids DETACH DELETE n RETURN n');
         expect(statement2.params).to.be.deep.equal({
             uuids: [uuid]
         });
     });
 
     it('should throw error when trying to delete nodes with invalid uuids', () => {
-        expect(() => statements.deleteNodesByIds('potato')).to.throw(GeoGraphValidationError, 'You must provide valid uuids');
+        expect(() => statements.deleteNodesById('potato')).to.throw(GeoGraphValidationError, 'You must provide valid uuids');
     });
 
     it('should return statement to delete nodes by query object', () => {
@@ -475,7 +475,7 @@ describe('Cypher', () => {
         });
 
         expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWhereCypherRegex(0)}\\s${getWithCypherRegex(0)}` +
-            `\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(2)}\\sDETACH DELETE \\w+,\\w+\\s`));
+            `\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(2)}\\sDETACH DELETE \\w+(,\\w+)*\\sRETURN \\w+(,\\w+)*\n$`));
     });
 
     it('should return statement to delete relationships betweeen nodes', () => {
