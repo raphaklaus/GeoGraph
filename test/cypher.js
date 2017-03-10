@@ -15,10 +15,10 @@ describe('Cypher', () => {
     let
         createCypherRegex = 'CREATE \\(\\w+:\\w+ \\$\\w+\\)\\s',
         createRelationshipCypherRegex = 'CREATE UNIQUE \\(\\w+\\)-\\[:\\w+\\]->\\(\\w+:\\w+ \\$\\w+\\)\\s',
-        matchCypherRegex = 'MATCH \\(\\w+ \\{\\w+: \\$\\w+\\}\\)',
+        matchCypherRegex = 'MATCH \\(\\w+:\\w+ \\{\\w+: \\$\\w+\\}\\)',
         matchLabelCypherRegex = 'MATCH \\(\\w+:\\w+\\)',
         getMatchRelationshipCypherRegex = (num) => `MATCH \\(\\w+\\)-\\[\\w+(:\\w+(\\|\\w+){${num}})?(\\*\\d\\.\\.)?\\]->\\(\\w+\\)`,
-        collectCypherRegex = 'collect\\(\\w+\\)',
+        collectCypherRegex = 'collect\\(distinct \\w+\\)',
         getWhereCypherRegex = function (num) {
             return `WHERE (\\w+\\.${regexes.propertyFilter.source}( ${regexes.booleanOperators.source} \\w+\\.${regexes.propertyFilter.source}){${num}})`;
         },
@@ -206,14 +206,19 @@ describe('Cypher', () => {
     });
 
     it('should return findById statement', () => {
-        let statement = statements.findById(node_uuid.v4());
+        let statement = statements.findById('Test', node_uuid.v4());
 
-        expect(statement.cypher).to.match(new RegExp(`^${matchCypherRegex}\\sWITH \\w+ ${getMatchRelationshipCypherRegex(0)}\\sRETURN collect\\(\\w+\\), collect\\(\\w+\\)$`));
+        expect(statement.cypher).to.match(new RegExp(`^${matchCypherRegex}\\sWITH \\w+ ${getMatchRelationshipCypherRegex(0)}\\sRETURN collect\\(distinct \\w+\\), collect\\(distinct \\w+\\)$`));
     });
 
     it('should throw error when trying to find by invalid uuid', () => {
         expect(() => statements.findById()).to.throw(GeoGraphValidationError, 'you must provide a valid uuid');
         expect(() => statements.findById('asdfsadf')).to.throw(GeoGraphValidationError, 'you must provide a valid uuid');
+    });
+
+    it('should throw error when trying to find by uuid with invlalid label', () => {
+        expect(() => statements.findById(null, node_uuid.v4())).to.throw(GeoGraphValidationError);
+        expect(() => statements.findById('1label', node_uuid.v4())).to.throw(GeoGraphValidationError);
     });
 
     it('should return statement with where filter', () => {
@@ -273,7 +278,7 @@ describe('Cypher', () => {
             ]
         });
 
-        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(1)}\\s${getEndCypherRegex(2)}$`));
+        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(2)}\\s${getEndCypherRegex(2)}$`));
     });
 
     it('should return statement with relationship where', () => {
@@ -283,7 +288,7 @@ describe('Cypher', () => {
                 'rel[property="value" AND anotherProperty > 10]'
             ]
         });
-        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWhereCypherRegex(1)}\\s${getWithCypherRegex(1)}\\s${getEndCypherRegex(2)}$`));
+        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWhereCypherRegex(1)}\\s${getWithCypherRegex(2)}\\s${getEndCypherRegex(2)}$`));
     });
 
     it('should return statement with relationship pagination', () => {
@@ -293,7 +298,7 @@ describe('Cypher', () => {
                 'rel{skip=10}'
             ]
         });
-        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(1)}\\s${paginationCypherRegex}\\s${getEndCypherRegex(2)}$`));
+        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(2)}\\s${paginationCypherRegex}\\s${getEndCypherRegex(2)}$`));
     });
 
     it('should return statement with relationship pagination and where', () => {
@@ -303,7 +308,7 @@ describe('Cypher', () => {
                 'rel{skip=10} [property = true OR anotherProperty IS NULL]'
             ]
         });
-        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWhereCypherRegex(1)}\\s${getWithCypherRegex(1)}\\s${paginationCypherRegex}\\s${getEndCypherRegex(2)}$`));
+        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWhereCypherRegex(1)}\\s${getWithCypherRegex(2)}\\s${paginationCypherRegex}\\s${getEndCypherRegex(2)}$`));
     });
 
     it('should return statement with where and relationship pagination and where', () => {
@@ -314,7 +319,7 @@ describe('Cypher', () => {
                 'rel{skip=10} [property = true OR anotherProperty IS NULL]'
             ]
         });
-        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWhereCypherRegex(0)}\\s${getWithCypherRegex(0)}\\s${paginationCypherRegex}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWhereCypherRegex(1)}\\s${getWithCypherRegex(1)}\\s${paginationCypherRegex}\\s${getEndCypherRegex(2)}$`));
+        expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWhereCypherRegex(0)}\\s${getWithCypherRegex(0)}\\s${paginationCypherRegex}\\s${getMatchRelationshipCypherRegex(0)}\\s${getWhereCypherRegex(1)}\\s${getWithCypherRegex(2)}\\s${paginationCypherRegex}\\s${getEndCypherRegex(2)}$`));
     });
 
     it('should return statement with multiple relationships', () => {
@@ -331,13 +336,16 @@ describe('Cypher', () => {
             statement = statements.find(queryObject);
 
         let cypherRegexString = `^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s`,
-            num = 1;
+            num = 1,
+            numRel = 1;
 
-        _.each(queryObject.relations, (relationString) =>
+        _.each(queryObject.relations, (relationString) => {
             _.each(relationString.split('.'), (relation) => {
-                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('-').length - 1)}\\s${getWithCypherRegex(num)}\\s`;
+                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('-').length - 1)}\\s${getWithCypherRegex(num + numRel)}\\s`;
+                numRel++;
                 num++;
-            }));
+            });
+        });
         cypherRegexString += `${getEndCypherRegex(num + num - 2)}$`;
 
         expect(statement.cypher).to.match(new RegExp(cypherRegexString));
@@ -357,15 +365,17 @@ describe('Cypher', () => {
             statement = statements.find(queryObject);
 
         let cypherRegexString = `^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s`,
-            num = 1;
+            num = 1,
+            numRel = 1;
 
         _.each(queryObject.relations, (relationString) =>
             _.each(relationString.split('.'), (relation) => {
                 if (relation[0] == '?') {
                     cypherRegexString += 'OPTIONAL ';
                 }
-                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('-').length - 1)}\\s${getWithCypherRegex(num)}\\s`;
+                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('-').length - 1)}\\s${getWithCypherRegex(num + numRel)}\\s`;
                 num++;
+                numRel++;
             }));
         cypherRegexString += `${getEndCypherRegex(num + num - 2)}$`;
 
@@ -387,7 +397,8 @@ describe('Cypher', () => {
             statement = statements.find(queryObject);
 
         let cypherRegexString = `^${matchLabelCypherRegex}\\s${getWhereCypherRegex(1)}\\s${getWithCypherRegex(0)}\\s${paginationCypherRegex}\\s`,
-            num = 1;
+            num = 1,
+            numRel = 1;
 
         _.each(queryObject.relations, (relationString) =>
             _.each(relationString.split('.'), (relation) => {
@@ -400,13 +411,14 @@ describe('Cypher', () => {
                     cypherRegexString += `\\s${getWhereCypherRegex((relation.match(regexes.booleanOperators) || [null]).length - 1)}`;
                 }
 
-                cypherRegexString += `\\s${getWithCypherRegex(num)}\\s`;
+                cypherRegexString += `\\s${getWithCypherRegex(num + numRel)}\\s`;
 
                 if (_.includes(relation, '{')) {
                     cypherRegexString += `${paginationCypherRegex}\\s`;
                 }
 
                 num++;
+                numRel++;
             }));
         cypherRegexString += `${getEndCypherRegex(num + num - 2)}$`;
 
@@ -436,14 +448,14 @@ describe('Cypher', () => {
     it('should return statement to delete nodes by id', () => {
         let
             uuid = node_uuid.v4(),
-            statement1 = statements.deleteNodesByIds([uuid]),
-            statement2 = statements.deleteNodesByIds(uuid);
+            statement1 = statements.deleteNodesByIds('Test',[uuid]),
+            statement2 = statements.deleteNodesByIds('Test', uuid);
 
-        expect(statement1.cypher).to.be.equal('MATCH (n) where n.uuid in $uuids DETACH DELETE n');
+        expect(statement1.cypher).to.be.equal('MATCH (n:Test) where n.uuid in $uuids DETACH DELETE n');
         expect(statement1.params).to.be.deep.equal({
             uuids: [uuid]
         });
-        expect(statement2.cypher).to.be.equal('MATCH (n) where n.uuid in $uuids DETACH DELETE n');
+        expect(statement2.cypher).to.be.equal('MATCH (n:Test) where n.uuid in $uuids DETACH DELETE n');
         expect(statement2.params).to.be.deep.equal({
             uuids: [uuid]
         });
@@ -454,7 +466,7 @@ describe('Cypher', () => {
     });
 
     it('should return statement to delete nodes by query object', () => {
-        let statement = statements.deleteNodes({
+        let statement = statements.deleteNodesByQueryObject({
             label: 'test',
             filter: '[property = "value"]',
             relations: [
@@ -463,7 +475,7 @@ describe('Cypher', () => {
         });
 
         expect(statement.cypher).to.match(new RegExp(`^${matchLabelCypherRegex}\\s${getWhereCypherRegex(0)}\\s${getWithCypherRegex(0)}` +
-            `\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(1)}\\sDETACH DELETE \\w+,\\w+\\s`));
+            `\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(2)}\\sDETACH DELETE \\w+,\\w+\\s`));
     });
 
     it('should return statement to delete relationships betweeen nodes', () => {
@@ -501,22 +513,22 @@ describe('Cypher', () => {
     });
 
     it('should throw error when trying to delete relationship with invalid values', () => {
-        expect(() => statements.deleteNodesByIds({
+        expect(() => statements.deleteRelationships({
             from: 'potato',
             to: node_uuid.v4(),
             relation: 'rel'
         })).to.throw(GeoGraphValidationError, 'You must provide valid uuids');
 
-        expect(() => statements.deleteNodesByIds({
+        expect(() => statements.deleteRelationships({
             to: 'potato',
             relation: 'rel',
             from: node_uuid.v4()
         })).to.throw(GeoGraphValidationError, 'You must provide valid uuids');
-        
-        expect(() => statements.deleteNodesByIds({
+
+        expect(() => statements.deleteRelationships({
             from: node_uuid.v4(),
             to: node_uuid.v4(),
             relation: ''
-        })).to.throw(GeoGraphValidationError, 'You must provide valid uuids');
+        })).to.throw(GeoGraphValidationError, 'You must provide valid relationship names');
     });
 });

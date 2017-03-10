@@ -186,10 +186,10 @@ describe('Sql', () => {
             statement2 = statements.find([uuid2, uuid3]);
 
         expect(statement1.sql).to.be.equal('select "node_uuid", "node_key", ' +
-            '"properties", ST_AsGeoJSON(node_geometry)::json as geometry from "geometries" where "node_uuid" ' +
+            '"properties", ST_AsGeoJSON(geometry)::json as geometry from "geometries" where "node_uuid" ' +
             `in ('${uuid1}')`);
         expect(statement2.sql).to.be.equal('select "node_uuid", "node_key", ' +
-            '"properties", ST_AsGeoJSON(node_geometry)::json as geometry from "geometries" where "node_uuid" ' +
+            '"properties", ST_AsGeoJSON(geometry)::json as geometry from "geometries" where "node_uuid" ' +
             `in ('${uuid2}', '${uuid3}')`);
     });
 

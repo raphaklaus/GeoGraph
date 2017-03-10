@@ -12,7 +12,7 @@
     "rules": {
         "no-unused-vars":"warn",
         "indent": [
-            "error",
+            "warn",
             4
         ],
         "linebreak-style": [
