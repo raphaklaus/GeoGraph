@@ -19,13 +19,23 @@ describe('Cypher', () => {
         matchLabelCypherRegex = 'MATCH \\(\\w+:\\w+\\)',
         getMatchRelationshipCypherRegex = (num) => `MATCH \\(\\w+\\)-\\[\\w+(:\\w+(\\|\\w+){${num}})?(\\*\\d\\.\\.)?\\]->\\(\\w+\\)`,
         collectCypherRegex = 'collect\\(distinct \\w+\\)',
-        getWhereCypherRegex = function (num) {
-            return `WHERE (\\w+\\.${regexes.propertyFilter.source}( ${regexes.booleanOperators.source} \\w+\\.${regexes.propertyFilter.source}){${num}})`;
-        },
-        getWithCypherRegex = function (num) {
-            return `WITH \\w+(,\\s*\\w+){${num}}`;
-        },
+        getWhereCypherRegex = (num) => `WHERE (\\w+\\.${regexes.propertyFilter.source}( ${regexes.booleanOperators.source} \\w+\\.${regexes.propertyFilter.source}){${num}})`,
+        getWithCypherRegex = (num) => `WITH \\w+(,\\s*\\w+){${num}}`,
         getEndCypherRegex = (num) => `RETURN \\w+(,\\s*(${collectCypherRegex})){${num}}\\n`,
+        getDeleteRelationshipsRegex = (numRel) => {
+            let
+                string = 'MATCH \\(\\w+:\\w+ \\{\\w+: ".+"\\}\\) WITH \\w+\\s',
+                acc = 2;
+
+            for (var current = 0; current < numRel; current++) {
+                string += `MATCH \\(\\w+\\)-\\[\\w+:\\w+\\]->\\(\\w+ \\{uuid: ".+"\\}\\) WITH \\w+(,\\w+){${acc}}\\s`;
+                acc += 2;
+            }
+
+            string += `DELETE \\w+(,\\w+){${numRel -1}}`;
+
+            return string;
+        },
         paginationCypherRegex = '((LIMIT \\d+)|(SKIP \\d+)|(SKIP \\d+ LIMIT \\d+))';
 
     it('should create statement query for simple node', () => {
@@ -448,7 +458,7 @@ describe('Cypher', () => {
     it('should return statement to delete nodes by id', () => {
         let
             uuid = node_uuid.v4(),
-            statement1 = statements.deleteNodesById('Test',[uuid]),
+            statement1 = statements.deleteNodesById('Test', [uuid]),
             statement2 = statements.deleteNodesById('Test', uuid);
 
         expect(statement1.cypher).to.be.equal('MATCH (n:Test) where n.uuid in $uuids DETACH DELETE n RETURN n');
@@ -478,57 +488,108 @@ describe('Cypher', () => {
             `\\s${getMatchRelationshipCypherRegex(0)}\\s${getWithCypherRegex(2)}\\sDETACH DELETE \\w+(,\\w+)*\\sRETURN \\w+(,\\w+)*\n$`));
     });
 
-    it('should return statement to delete relationships betweeen nodes', () => {
-
+    it('should return statement to delete one relationship', () => {
         let
-            uuid1 = node_uuid.v4(),
-            uuid2 = node_uuid.v4(),
-            statement1 = statements.deleteRelationships([{
-                from: uuid1,
-                to: uuid2,
-                relation: 'rel'
-            }]),
-            statement2 = statements.deleteRelationships({
-                from: uuid1,
-                to: uuid2,
-                relation: 'rel'
-            }),
-            deleteRelationshipCypher = 'MATCH (a)-[r]->(b)\n' +
-                'WHERE a.uuid in $startUuids AND b.uuid in $endUuids AND type(r) in $relationshipNames\n' +
-                'DELETE r';
+            statement = statements.deleteRelationships({
+                _label: 'Test',
+                uuid: node_uuid.v4(),
+                rel: {
+                    uuid: node_uuid.v4()
+                }
+            });
 
-        expect(statement1.cypher).to.be.equal(deleteRelationshipCypher);
-        expect(statement1.params).to.be.deep.equal({
-            startUuids: [uuid1],
-            endUuids: [uuid2],
-            relationshipNames: ['rel']
-        });
-
-        expect(statement1.cypher).to.be.equal(deleteRelationshipCypher);
-        expect(statement1.params).to.be.deep.equal({
-            startUuids: [uuid1],
-            endUuids: [uuid2],
-            relationshipNames: ['rel']
-        });
+        expect(statement.cypher).to.match(new RegExp(getDeleteRelationshipsRegex(1)));
     });
 
-    it('should throw error when trying to delete relationship with invalid values', () => {
-        expect(() => statements.deleteRelationships({
-            from: 'potato',
-            to: node_uuid.v4(),
-            relation: 'rel'
-        })).to.throw(GeoGraphValidationError, 'You must provide valid uuids');
+    it('should return statement to delete multiples relationships', () => {
+        let
+            statement = statements.deleteRelationships({
+                _label: 'Test',
+                uuid: node_uuid.v4(),
+                rel: {
+                    uuid: node_uuid.v4()
+                },
+                rel2: {
+                    uuid: node_uuid.v4()
+                }
+            });
 
-        expect(() => statements.deleteRelationships({
-            to: 'potato',
-            relation: 'rel',
-            from: node_uuid.v4()
-        })).to.throw(GeoGraphValidationError, 'You must provide valid uuids');
+        expect(statement.cypher).to.match(new RegExp(getDeleteRelationshipsRegex(2)));
+    });
 
+    it('should return statement to delete multiples deep relationships', () => {
+        let
+            statement = statements.deleteRelationships({
+                _label: 'Test',
+                uuid: node_uuid.v4(),
+                rel: {
+                    uuid: node_uuid.v4()
+                },
+                rel2: {
+                    uuid: node_uuid.v4(),
+                    rel3: {
+                        uuid: node_uuid.v4(),
+                        rel4: {
+                            uuid: node_uuid.v4()
+                        },
+                        rel5: {
+                            uuid: node_uuid.v4()
+                        }
+                    }
+                }
+            });
+
+        expect(statement.cypher).to.match(new RegExp(getDeleteRelationshipsRegex(5)));
+    });
+
+    it('should throw error when trying to delete relationships without passing any relationship', () => {
         expect(() => statements.deleteRelationships({
-            from: node_uuid.v4(),
-            to: node_uuid.v4(),
-            relation: ''
-        })).to.throw(GeoGraphValidationError, 'You must provide valid relationship names');
+            uuid: node_uuid.v4(),
+            _label: 'test'
+        })).to.throw(GeoGraphValidationError, 'You must provide at least one relationship to remove');
+    });
+
+    it('should throw error when trying to delete relationships with an empty node', () => {
+        expect(() => statements.deleteRelationships({})).to.throw(GeoGraphValidationError, 'You must provide non-empty nodes');
+    });
+
+    it('should throw error when trying to delete relationships with invalid root label', () => {
+        expect(() => statements.deleteRelationships({
+            uuid: node_uuid.v4(),
+        })).to.throw(GeoGraphValidationError, /You must provide a valid label/);
+        expect(() => statements.deleteRelationships({
+            uuid: node_uuid.v4(),
+            _label: '12invalid'
+        })).to.throw(GeoGraphValidationError, /You must provide a valid label/);
+        expect(() => statements.deleteRelationships({
+            uuid: node_uuid.v4(),
+            _label: ''
+        })).to.throw(GeoGraphValidationError, /You must provide a valid label/);
+    });
+
+    it('should throw error when trying to delete relationships with invalid uuid', () => {
+        expect(() => statements.deleteRelationships({
+            _label: 'test'
+        })).to.throw(GeoGraphValidationError, /You must provide a valid uuid/);
+        expect(() => statements.deleteRelationships({
+            _label: 'test',
+            uuid: node_uuid.v4(),
+            rel: {
+                uuid: 'invalid'
+            }
+        })).to.throw(GeoGraphValidationError, /You must provide a valid uuid/);
+        expect(() => statements.deleteRelationships({
+            _label: 'test',
+            uuid: node_uuid.v4(),
+            rel: {
+                uuid: node_uuid.v4(),
+                subRel: {
+                    uuid: node_uuid.v4(),
+                    deeperRel: {
+                        uuid: ''
+                    }
+                }
+            }
+        })).to.throw(GeoGraphValidationError, /You must provide a valid uuid/);
     });
 });
