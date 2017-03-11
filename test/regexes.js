@@ -161,6 +161,12 @@ describe('Regexes', () => {
         expect(group).to.not.be.ok;
     });
 
+    it('should extract variable name, if there is any', () => {
+        let group = regexes.variable.getGroup('rel @varName', 'variable');
+
+        expect(group).to.be.equal('varName');
+    });
+
     it('should parse a complex filter string', () => {
         let string = 'relation[name = "Doge" AND age > 100 AND age < 200 OR name<>"WoW "' +
         'OR quantity >=50 AND otherProperty<= 155 OR property IS NOT NULL AND ' +

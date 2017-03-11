@@ -188,33 +188,6 @@ describe('Cypher', () => {
         expect(() => statements.create(json3)).to.throw(GeoGraphValidationError, `you must provide a valid label - ${json3}`);
     });
 
-    it('should throw error when trying to insert empty node', () => {
-        let
-            json1 = {},
-            json2 = {
-                _label: 'test'
-            },
-            json3 = {
-                _label: 'test',
-                name: 'name',
-                relation: {}
-            },
-            json4 = {
-                _label: 'test',
-                name: 'name',
-                relation: {
-                    _label: 'test2',
-                    property: 'value',
-                    relation: {}
-                }
-            };
-
-        expect(() => statements.create(json1)).to.throw(GeoGraphValidationError, 'you cannot insert an empty node');
-        expect(() => statements.create(json2)).to.throw(GeoGraphValidationError, 'you cannot insert an empty node');
-        expect(() => statements.create(json3)).to.throw(GeoGraphValidationError, 'you cannot insert an empty node');
-        expect(() => statements.create(json4)).to.throw(GeoGraphValidationError, 'you cannot insert an empty node');
-    });
-
     it('should return findById statement', () => {
         let statement = statements.findById('Test', node_uuid.v4());
 
@@ -338,9 +311,9 @@ describe('Cypher', () => {
                 label: 'test',
                 relations: [
                     'rel1',
-                    'rel2.rel3',
-                    'rel4-rel5',
-                    'rel6.rel7-rel8.rel9'
+                    'rel2->rel3',
+                    'rel4|rel5',
+                    'rel6->rel7|rel8->rel9'
                 ]
             },
             statement = statements.find(queryObject);
@@ -348,10 +321,10 @@ describe('Cypher', () => {
         let cypherRegexString = `^${matchLabelCypherRegex}\\s${getWithCypherRegex(0)}\\s`,
             num = 1,
             numRel = 1;
-
+        
         _.each(queryObject.relations, (relationString) => {
-            _.each(relationString.split('.'), (relation) => {
-                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('-').length - 1)}\\s${getWithCypherRegex(num + numRel)}\\s`;
+            _.each(relationString.split('->'), (relation) => {
+                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('|').length - 1)}\\s${getWithCypherRegex(num + numRel)}\\s`;
                 numRel++;
                 num++;
             });
@@ -367,9 +340,9 @@ describe('Cypher', () => {
                 label: 'test',
                 relations: [
                     'rel1',
-                    '?rel2.rel3',
-                    '?rel4-rel5',
-                    '?rel6.?rel7-rel8.?rel9'
+                    '?rel2->rel3',
+                    '?rel4|rel5',
+                    '?rel6->?rel7|rel8->?rel9'
                 ]
             },
             statement = statements.find(queryObject);
@@ -379,11 +352,11 @@ describe('Cypher', () => {
             numRel = 1;
 
         _.each(queryObject.relations, (relationString) =>
-            _.each(relationString.split('.'), (relation) => {
+            _.each(relationString.split('->'), (relation) => {
                 if (relation[0] == '?') {
                     cypherRegexString += 'OPTIONAL ';
                 }
-                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('-').length - 1)}\\s${getWithCypherRegex(num + numRel)}\\s`;
+                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('|').length - 1)}\\s${getWithCypherRegex(num + numRel)}\\s`;
                 num++;
                 numRel++;
             }));
@@ -399,9 +372,9 @@ describe('Cypher', () => {
                 filter: '{skip=10 limit=5} [property = "value" AND anotherProperty <=5]',
                 relations: [
                     'rel1 {limit=10}',
-                    '?rel2.rel3[property IS NOT NULL]',
-                    '?rel4-rel5 {skip=1 limit=2} [property = "value" AND anotherProperty <=5]',
-                    '?rel6.?rel7-rel8.?rel9'
+                    '?rel2|rel3[property IS NOT NULL]',
+                    '?rel4->rel5 {skip=1 limit=2} [property = "value" AND anotherProperty <=5]',
+                    '?rel6->?rel7|rel8->?rel9'
                 ]
             },
             statement = statements.find(queryObject);
@@ -411,11 +384,11 @@ describe('Cypher', () => {
             numRel = 1;
 
         _.each(queryObject.relations, (relationString) =>
-            _.each(relationString.split('.'), (relation) => {
+            _.each(relationString.split('->'), (relation) => {
                 if (relation[0] == '?') {
                     cypherRegexString += 'OPTIONAL ';
                 }
-                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('-').length - 1)}`;
+                cypherRegexString += `${getMatchRelationshipCypherRegex(relation.split('|').length - 1)}`;
 
                 if (_.includes(relation, '[')) {
                     cypherRegexString += `\\s${getWhereCypherRegex((relation.match(regexes.booleanOperators) || [null]).length - 1)}`;
