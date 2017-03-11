@@ -13,8 +13,8 @@ function _getParamsNthKey(params, index = 0) {
 describe('Cypher', () => {
 
     let
-        createCypherRegex = 'CREATE \\(\\w+:\\w+ \\$\\w+\\)\\s',
-        createRelationshipCypherRegex = 'CREATE UNIQUE \\(\\w+\\)-\\[:\\w+\\]->\\(\\w+:\\w+ \\$\\w+\\)\\s',
+        createCypherRegex = 'CREATE \\(\\w+:\\w+:Geograph \\$\\w+\\)\\s',
+        createRelationshipCypherRegex = 'CREATE UNIQUE \\(\\w+\\)-\\[:\\w+\\]->\\(\\w+:\\w+:Geograph \\$\\w+\\)\\s',
         matchCypherRegex = 'MATCH \\(\\w+:\\w+ \\{\\w+: \\$\\w+\\}\\)',
         matchLabelCypherRegex = 'MATCH \\(\\w+:\\w+\\)',
         getMatchRelationshipCypherRegex = (num) => `MATCH \\(\\w+\\)-\\[\\w+(:\\w+(\\|\\w+){${num}})?(\\*\\d\\.\\.)?\\]->\\(\\w+\\)`,
