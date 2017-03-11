@@ -1,6 +1,6 @@
 {
-  "name": "geograph",
-  "version": "1.0.0",
+  "name": "geo-graph",
+  "version": "0.1.0",
   "description": "",
   "main": "lib/index.js",
   "scripts": {
