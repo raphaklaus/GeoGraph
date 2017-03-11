@@ -9,5 +9,8 @@ Schema free, easy to use, polyglot database solution for general persistence wit
 #Installation
 `npm install geo-graph --save`
 
+#Documentation
+[Go to the wiki](https://github.com/dodiego/GeoGraph/wiki)
+
 #Tests
 `npm test`
