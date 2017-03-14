@@ -16,7 +16,7 @@ describe('Cypher', () => {
         createCypherRegex = 'CREATE \\(\\w+:\\w+:Geograph \\$\\w+\\)\\s',
         createRelationshipCypherRegex = 'CREATE UNIQUE \\(\\w+\\)-\\[:\\w+\\]->\\(\\w+:\\w+:Geograph \\$\\w+\\)\\s',
         matchCypherRegex = 'MATCH \\(\\w+:\\w+ \\{\\w+: \\$\\w+\\}\\)',
-        matchLabelCypherRegex = 'MATCH \\(\\w+:\\w+\\)',
+        matchLabelCypherRegex = 'MATCH \\(\\w+:Geograph:\\w+(:\\w+)*\\)',
         getMatchRelationshipCypherRegex = (num) => `MATCH \\(\\w+\\)-\\[\\w+(:\\w+(\\|\\w+){${num}})?(\\*\\d\\.\\.)?\\]->\\(\\w+\\)`,
         collectCypherRegex = 'collect\\(distinct \\w+\\)',
         getWhereCypherRegex = (num) => `WHERE (\\w+\\.${regexes.propertyFilter.source}( ${regexes.booleanOperators.source} \\w+\\.${regexes.propertyFilter.source}){${num}})`,
@@ -40,7 +40,7 @@ describe('Cypher', () => {
 
     it('should create statement query for simple node', () => {
         let statement = statements.create({
-            _label: 'test',
+            _labels: 'test',
             name: 'name test'
         });
 
@@ -55,7 +55,7 @@ describe('Cypher', () => {
         let
             date = new Date(),
             statement = statements.create({
-                _label: 'test',
+               _label: 'test',
                 name: 'name test',
                 numericProperty: 123,
                 booleanProperty: true,
@@ -74,10 +74,10 @@ describe('Cypher', () => {
 
     it('shoud create statement query with multiple relationships', () => {
         let statement = statements.create({
-            _label: 'test',
+           _label: 'test',
             name: 'name test',
             relation: {
-                _label: 'test',
+               _label: 'test',
                 rel_property: 123
             },
             anotherRelations: [{
@@ -104,10 +104,10 @@ describe('Cypher', () => {
 
     it('should create statement query with multiple relationships and multiple dephts', () => {
         let statement = statements.create({
-            _label: 'test',
+           _label: 'test',
             name: 'name test',
             relation: {
-                _label: 'test',
+               _label: 'test',
                 rel_property: 123,
                 anotherRelations: [{
                     _label: 'test2',
@@ -136,7 +136,7 @@ describe('Cypher', () => {
 
     it('should return start uuid when creating nodes', () => {
         let statement = statements.create({
-            _label: 'test',
+           _label: 'test',
             name: 'name test'
         });
 
@@ -159,10 +159,10 @@ describe('Cypher', () => {
                 property: 'value'
             },
             json1 = {
-                _label: 'test',
+               _label: 'test',
                 property: true,
                 relation: {
-                    _label: 'test',
+                   _label: 'test',
                     property: 123,
                     subRelation: relation1
                 }
@@ -173,7 +173,7 @@ describe('Cypher', () => {
                 property: 'value'
             },
             json2 = {
-                _label: 'test',
+               _label: 'test',
                 property: true,
                 relation: relation2
             };
@@ -206,7 +206,7 @@ describe('Cypher', () => {
 
     it('should return statement with where filter', () => {
         let statement = statements.find({
-            label: 'test',
+            labels: ['test'],
             filter: '[property > 10]'
         });
 
@@ -216,15 +216,15 @@ describe('Cypher', () => {
     it('should return statement with pagination', () => {
         let
             statement1 = statements.find({
-                label: 'test',
+                labels: ['test'],
                 filter: '{skip=10}'
             }),
             statement2 = statements.find({
-                label: 'test',
+                labels: ['test'],
                 filter: '{limit=5}'
             }),
             statement3 = statements.find({
-                label: 'test',
+                labels: ['test'],
                 filter: '{skip=10 limit=5}'
             });
 
@@ -236,15 +236,15 @@ describe('Cypher', () => {
     it('should return statement with where and pagination', () => {
         let
             statement1 = statements.find({
-                label: 'test',
+                labels: ['test'],
                 filter: '{skip=10} [property > 10]'
             }),
             statement2 = statements.find({
-                label: 'test',
+                labels: ['test'],
                 filter: '{limit=5} [property = "value"]'
             }),
             statement3 = statements.find({
-                label: 'test',
+                labels: ['test'],
                 filter: '{skip=10 limit=5} [property = "value" and anotherProperty <=5]'
             });
 
@@ -255,7 +255,7 @@ describe('Cypher', () => {
 
     it('should return statement with relationship match', () => {
         let statement = statements.find({
-            label: 'test',
+            labels: ['test'],
             relations: [
                 'rel'
             ]
@@ -266,7 +266,7 @@ describe('Cypher', () => {
 
     it('should return statement with relationship where', () => {
         let statement = statements.find({
-            label: 'test',
+            labels: ['test'],
             relations: [
                 'rel[property="value" AND anotherProperty > 10]'
             ]
@@ -276,7 +276,7 @@ describe('Cypher', () => {
 
     it('should return statement with relationship pagination', () => {
         let statement = statements.find({
-            label: 'test',
+            labels: ['test'],
             relations: [
                 'rel{skip=10}'
             ]
@@ -286,7 +286,7 @@ describe('Cypher', () => {
 
     it('should return statement with relationship pagination and where', () => {
         let statement = statements.find({
-            label: 'test',
+            labels: ['test'],
             relations: [
                 'rel{skip=10} [property = true OR anotherProperty IS NULL]'
             ]
@@ -296,7 +296,7 @@ describe('Cypher', () => {
 
     it('should return statement with where and relationship pagination and where', () => {
         let statement = statements.find({
-            label: 'test',
+            labels: ['test'],
             filter: '[property IS NOT NULL] {skip = 5 limit = 15}',
             relations: [
                 'rel{skip=10} [property = true OR anotherProperty IS NULL]'
@@ -308,7 +308,7 @@ describe('Cypher', () => {
     it('should return statement with multiple relationships', () => {
         let
             queryObject = {
-                label: 'test',
+                labels: ['test'],
                 relations: [
                     'rel1',
                     'rel2->rel3',
@@ -337,7 +337,7 @@ describe('Cypher', () => {
     it('should return statement with multiple optional relationships', () => {
         let
             queryObject = {
-                label: 'test',
+                labels: ['test'],
                 relations: [
                     'rel1',
                     '?rel2->rel3',
@@ -368,7 +368,7 @@ describe('Cypher', () => {
     it('should parse a complete queryObject with multiple relationships of multiple depths and filters and pagination', () => {
         let
             queryObject = {
-                label: 'test',
+                labels: ['test'],
                 filter: '{skip=10 limit=5} [property = "value" AND anotherProperty <=5]',
                 relations: [
                     'rel1 {limit=10}',
@@ -412,13 +412,13 @@ describe('Cypher', () => {
         let
             queryObject1 = {},
             queryObject2 = {
-                label: 'test',
+                labels: ['test'],
                 relations: [
                     '..'
                 ]
             },
             queryObject3 = {
-                label: 'test',
+                labels: ['test'],
                 relations: 'lasdf'
             };
 
@@ -450,7 +450,7 @@ describe('Cypher', () => {
 
     it('should return statement to delete nodes by query object', () => {
         let statement = statements.deleteNodesByQueryObject({
-            label: 'test',
+            labels: ['test'],
             filter: '[property = "value"]',
             relations: [
                 'rel'
@@ -464,7 +464,7 @@ describe('Cypher', () => {
     it('should return statement to delete one relationship', () => {
         let
             statement = statements.deleteRelationships({
-                _label: 'Test',
+               _label: 'test',
                 uuid: node_uuid.v4(),
                 rel: {
                     uuid: node_uuid.v4()
@@ -477,7 +477,7 @@ describe('Cypher', () => {
     it('should return statement to delete multiples relationships', () => {
         let
             statement = statements.deleteRelationships({
-                _label: 'Test',
+               _label: 'test',
                 uuid: node_uuid.v4(),
                 rel: {
                     uuid: node_uuid.v4()
@@ -493,7 +493,7 @@ describe('Cypher', () => {
     it('should return statement to delete multiples deep relationships', () => {
         let
             statement = statements.deleteRelationships({
-                _label: 'Test',
+               _label: 'test',
                 uuid: node_uuid.v4(),
                 rel: {
                     uuid: node_uuid.v4()
@@ -518,7 +518,7 @@ describe('Cypher', () => {
     it('should throw error when trying to delete relationships without passing any relationship', () => {
         expect(() => statements.deleteRelationships({
             uuid: node_uuid.v4(),
-            _label: 'test'
+           _label: 'test'
         })).to.throw(GeoGraphValidationError, 'You must provide at least one relationship to remove');
     });
 
@@ -542,17 +542,17 @@ describe('Cypher', () => {
 
     it('should throw error when trying to delete relationships with invalid uuid', () => {
         expect(() => statements.deleteRelationships({
-            _label: 'test'
+           _label: 'test'
         })).to.throw(GeoGraphValidationError, /You must provide a valid uuid/);
         expect(() => statements.deleteRelationships({
-            _label: 'test',
+           _label: 'test',
             uuid: node_uuid.v4(),
             rel: {
                 uuid: 'invalid'
             }
         })).to.throw(GeoGraphValidationError, /You must provide a valid uuid/);
         expect(() => statements.deleteRelationships({
-            _label: 'test',
+           _label: 'test',
             uuid: node_uuid.v4(),
             rel: {
                 uuid: node_uuid.v4(),

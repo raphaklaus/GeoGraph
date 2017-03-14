@@ -189,4 +189,8 @@ describe('Regexes', () => {
         expect(pagination).to.have.property('skip', '10');
         expect(pagination).to.have.property('limit', '15');
     });
+
+    it('should parse a spatial query', () => {
+        let query = 'ST_Distance()';
+    });
 });

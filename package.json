@@ -20,6 +20,7 @@
     "async": "^2.1.4",
     "bluebird": "^3.4.7",
     "knex": "^0.12.6",
+    "knex-postgis": "^0.2.0",
     "lodash": "^4.17.4",
     "lodash-uuid": "0.0.3",
     "moment": "^2.17.1",
