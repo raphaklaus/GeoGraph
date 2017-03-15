@@ -40,7 +40,7 @@ describe('Cypher', () => {
 
     it('should create statement query for simple node', () => {
         let statement = statements.create({
-            _labels: 'test',
+            _label: 'test',
             name: 'name test'
         });
 
@@ -422,7 +422,7 @@ describe('Cypher', () => {
                 relations: 'lasdf'
             };
 
-        expect(() => statements.find(queryObject1)).to.throw(GeoGraphValidationError, 'You must provide a label to start the search');
+        expect(() => statements.find(queryObject1)).to.throw(GeoGraphValidationError, 'You must provide a labels array to start the search');
         expect(() => statements.find(queryObject2)).to.throw(GeoGraphValidationError, 'You must provide the name of the relationship');
         expect(() => statements.find(queryObject3)).to.throw(GeoGraphValidationError, 'relations must be an array');
         expect(() => statements.find()).to.throw(GeoGraphValidationError, 'You must provide a query object');

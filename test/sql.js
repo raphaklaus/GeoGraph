@@ -11,8 +11,8 @@ const
 
 describe('Sql', () => {
     let
-        insertStartSql = 'INSERT INTO geometries (node_uuid, node_key, geometry, properties)\nVALUES\n',
-        insertValuesSql = '( ?, ?, ?, ?)',
+        insertStartSql = 'INSERT INTO geometries (node_uuid, node_key, node_label, geometry, properties)\nVALUES\n',
+        insertValuesSql = '(?, ?, ?, ?, ?)',
         insertEndSql = '\nON CONFLICT ON CONSTRAINT uuid_key_unique\n' +
             'DO UPDATE SET geometry = excluded.geometry, properties = excluded.properties',
         point = turf.point([0, 0]),
@@ -30,23 +30,25 @@ describe('Sql', () => {
         let
             uuid = node_uuid.v4(),
             json1 = {
+                _label: 'Test',
                 uuid: uuid,
                 geojson: point
             },
             statement1 = statements.create(json1),
             json2 = {
+                _label: 'Test',
                 uuid: uuid,
                 point: point,
                 path: linestring
             },
             statement2 = statements.create(json2);
-
+        
         expect(statement1.insert.sql).to.be.equal(`${insertStartSql}${_.times(1, _.constant(insertValuesSql)).join(',')}${insertEndSql}`);
-        expect(statement1.insert.params).to.be.deep.equal([uuid, 'geojson', wkt.convert(point.geometry), {}]);
+        expect(statement1.insert.params).to.be.deep.equal([uuid, 'geojson', 'Test', wkt.convert(point.geometry), {}]);
 
         expect(statement2.insert.sql).to.be.equal(`${insertStartSql}${_.times(2, _.constant(insertValuesSql)).join(',')}${insertEndSql}`);
-        expect(statement2.insert.params.slice(0, 4)).to.be.deep.equal([uuid, 'point', wkt.convert(point.geometry), {}]);
-        expect(statement2.insert.params.slice(4)).to.be.deep.equal([uuid, 'path', wkt.convert(linestring.geometry), {}]);
+        expect(statement2.insert.params.slice(0, 5)).to.be.deep.equal([uuid, 'point', 'Test', wkt.convert(point.geometry), {}]);
+        expect(statement2.insert.params.slice(5)).to.be.deep.equal([uuid, 'path', 'Test', wkt.convert(linestring.geometry), {}]);
     });
 
     it('should return insert sql statements for relationships', () => {
@@ -55,15 +57,19 @@ describe('Sql', () => {
             uuid2 = node_uuid.v4(),
             json1 = {
                 uuid: uuid,
+                _label: 'Test',
                 rel: {
+                    _label: 'Test',
                     uuid: uuid2,
                     location: point
                 }
             },
             statement1 = statements.create(json1),
             json2 = {
+                _label: 'Test',
                 uuid: uuid,
                 rel: {
+                    _label: 'Test',
                     uuid: uuid2,
                     address: point,
                     street: linestring
@@ -72,11 +78,11 @@ describe('Sql', () => {
             statement2 = statements.create(json2);
 
         expect(statement1.insert.sql).to.be.equal(`${insertStartSql}${_.times(1, _.constant(insertValuesSql)).join(',')}${insertEndSql}`);
-        expect(statement1.insert.params).to.be.deep.equal([uuid2, 'location', wkt.convert(point.geometry), {}]);
+        expect(statement1.insert.params).to.be.deep.equal([uuid2, 'location', 'Test', wkt.convert(point.geometry), {}]);
 
         expect(statement2.insert.sql).to.be.equal(`${insertStartSql}${_.times(2, _.constant(insertValuesSql)).join(',')}${insertEndSql}`);
-        expect(statement2.insert.params.slice(0, 4)).to.be.deep.equal([uuid2, 'address', wkt.convert(point.geometry), {}]);
-        expect(statement2.insert.params.slice(4)).to.be.deep.equal([uuid2, 'street', wkt.convert(linestring.geometry), {}]);
+        expect(statement2.insert.params.slice(0, 5)).to.be.deep.equal([uuid2, 'address', 'Test', wkt.convert(point.geometry), {}]);
+        expect(statement2.insert.params.slice(5)).to.be.deep.equal([uuid2, 'street', 'Test', wkt.convert(linestring.geometry), {}]);
     });
 
     it('should return insert sql statements for complex jsons', () => {
@@ -112,9 +118,9 @@ describe('Sql', () => {
             statement = statements.create(json);
 
         expect(statement.insert.sql).to.be.equal(`${insertStartSql}${_.times(3, _.constant(insertValuesSql)).join(',')}${insertEndSql}`);
-        expect(statement.insert.params.slice(0, 4)).to.be.deep.equal([uuid1, 'point', wkt.convert(point.geometry), {}]);
-        expect(statement.insert.params.slice(4, 8)).to.be.deep.equal([uuid2, 'linestring', wkt.convert(linestring.geometry), {}]);
-        expect(statement.insert.params.slice(8)).to.be.deep.equal([uuid4, 'polygon', wkt.convert(polygon.geometry), { someProperty: 'test' }]);
+        expect(statement.insert.params.slice(0, 5)).to.be.deep.equal([uuid1, 'point', 'potato', wkt.convert(point.geometry), {}]);
+        expect(statement.insert.params.slice(5, 10)).to.be.deep.equal([uuid2, 'linestring', 'potato', wkt.convert(linestring.geometry), {}]);
+        expect(statement.insert.params.slice(10)).to.be.deep.equal([uuid4, 'polygon', 'tomato', wkt.convert(polygon.geometry), { someProperty: 'test' }]);
     });
 
     it('should return delete sql statements', () => {
@@ -123,12 +129,15 @@ describe('Sql', () => {
             uuid2 = node_uuid.v4(),
             uuid3 = node_uuid.v4(),
             json = {
+                _label: 'Test',
                 uuid: uuid1,
                 position: null,
                 rel: {
+                    _label: 'Test2',
                     uuid: uuid2,
                     path: undefined,
                     subRel: {
+                        _label: 'Test3',
                         uuid: uuid3,
                         name: '',
                         area: null
@@ -182,20 +191,27 @@ describe('Sql', () => {
             uuid1 = node_uuid.v4(),
             uuid2 = node_uuid.v4(),
             uuid3 = node_uuid.v4(),
-            statement1 = statements.find(uuid1),
-            statement2 = statements.find([uuid2, uuid3]);
+            statement1 = statements.findByIds(uuid1),
+            statement2 = statements.findByIds([uuid2, uuid3]),
+            hash1 = {},
+            hash2 = {};
+        
+        hash1[uuid1] = true;
+
+        hash2[uuid2] = true;
+        hash2[uuid3] = true;
 
         expect(statement1.sql).to.be.equal('select "node_uuid", "node_key", ' +
-            '"properties", ST_AsGeoJSON(geometry)::json as geometry from "geometries" where "node_uuid" ' +
-            `in ('${uuid1}')`);
+            '"properties", ST_AsGeoJSON(geometry)::json as geojson from "geometries" where ' +
+            `'${JSON.stringify(hash1)}'::jsonb \\? node_uuid::text`);
         expect(statement2.sql).to.be.equal('select "node_uuid", "node_key", ' +
-            '"properties", ST_AsGeoJSON(geometry)::json as geometry from "geometries" where "node_uuid" ' +
-            `in ('${uuid2}', '${uuid3}')`);
+            '"properties", ST_AsGeoJSON(geometry)::json as geojson from "geometries" where ' +
+            `'${JSON.stringify(hash2)}'::jsonb \\? node_uuid::text`);
     });
 
     it('should validate invalid uuids', () => {
-        expect(() => statements.find('potato')).to.throw(GeoGraphValidationError);
-        expect(() => statements.find([node_uuid.v4(), 'tomato'])).to.throw(GeoGraphValidationError);
+        expect(() => statements.findByIds('potato')).to.throw(GeoGraphValidationError);
+        expect(() => statements.findByIds([node_uuid.v4(), 'tomato'])).to.throw(GeoGraphValidationError);
     });
 
 
