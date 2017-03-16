@@ -1,5 +1,7 @@
 # GeoGraph
-Schema free, easy to use, polyglot database solution for general persistence with spatial capabilities
+Schema free, easy to use, polyglot database solution for general persistence with spatial capabilities<br>
+
+`This project is still on beta and any api methods are susceptible to changes`
 
 # Pre-requisites 
 - You must have [Neo4j](https://neo4j.com/download/) installed 
@@ -118,6 +120,7 @@ geograph.save({
   - One is the error, if any
   - The other is the uuid of the first object that is related to all others
 
+
 #### Retrieving objects by id
 Lets retrieve the json that we just inserted
 
@@ -161,6 +164,7 @@ the json above will be something like this:
     }
 }
 ```
+#### updating objects
 
 As you can see, each object had an uuid assigned that you can use to update them, adding, modifying or removing properties and adding new relationships, consider this example:
 
@@ -201,7 +205,9 @@ The code above do the following:
 - Remove the property `city` from the obejct with `uuid '23ceb866-c564-462a-8784-8c0cfc8dbc0d'`
 - Change the coordinates of the location of the `Event`
 
-As you can see, you can perform multiple operations at once with save, if the object have uuid, it will perform an update, if not, it will create a new entry in the database and crete any relationships that it might have
+As you can see, you can perform multiple operations at once with save, if the object have uuid, it will perform an update, if not, it will create a new entry in the database and create any relationships that it might have. <br><br>
+
+You may also batch insert/update, just use an array of jsons instead of single json as the first parameter of `save`
 
 #### querying
 
