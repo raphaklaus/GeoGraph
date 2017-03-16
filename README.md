@@ -60,22 +60,22 @@ That's it, you're now ready to go
 
 ```javascript
 const
-	Geograph = require('geo-graph'),
-	geograph = new Geograph({
-	    neo4j: {
-	        host: 'localhost',
-	        auth: {
-	            user: 'neo4j',
-	            password: 'neo4j'
-	        }
-	    },
-	    pg: {
-	        host: 'localhost',
-	        user: 'postgres',
-	        password: 'postgres',
-	        database: 'like_u'
-	    }
-	});
+    Geograph = require('geo-graph'),
+    geograph = new Geograph({
+        neo4j: {
+            host: 'localhost',
+            auth: {
+                user: 'neo4j',
+                password: 'neo4j'
+            }
+        },
+        pg: {
+            host: 'localhost',
+            user: 'postgres',
+            password: 'postgres',
+            database: 'like_u'
+        }
+    });
 ```
 
 #### Important notes:
@@ -88,31 +88,31 @@ After instantiating geograph, you can you use to play around with your data
 
 ```javascript
 geograph.save({
-	_label: 'Person',
-	name: 'Diego',
-	interests: [{
-		_label: 'ProgrammingLanguage',
-		name: 'javascript'
-	}, {
-		_label: 'TvShow',
-		title: 'Suits'
-	}],
-	nextEvent: {
-		_label: 'Event',
-		city: 'Seattle',
-		name: 'The International',
-		location: {
-	    	"type": "Feature",
-	    	"properties": {},
-	    	"geometry": {
-	        	"type": "Point",
-	        	"coordinates": [
-	          	-122.32246398925781,
-	          	47.60431120244565
-	        ]
-	      }
-	    }
-	}
+    _label: 'Person',
+    name: 'Diego',
+    interests: [{
+        _label: 'ProgrammingLanguage',
+        name: 'javascript'
+    }, {
+        _label: 'TvShow',
+        title: 'Suits'
+    }],
+    nextEvent: {
+        _label: 'Event',
+        city: 'Seattle',
+        name: 'The International',
+        location: {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -122.32246398925781,
+                    47.60431120244565
+            ]
+          }
+        }
+    }
 }, (err, uuid) => console.log(err, uuid));
 ```
 #### Important notes
@@ -135,34 +135,34 @@ the json above will be something like this:
 ```javascript
 {
     uuid: '23ceb866-c564-462a-8784-8c0cfc8dbc0a'
-	_label: 'Person',
-	name: 'Diego',
-	interests: [{
+    _label: 'Person',
+    name: 'Diego',
+    interests: [{
         uuid: '23ceb866-c564-462a-8784-8c0cfc8dbc0b',
-		_label: 'ProgrammingLanguage',
-		name: 'javascript'
-	}, {
+        _label: 'ProgrammingLanguage',
+        name: 'javascript'
+    }, {
         uuid: '23ceb866-c564-462a-8784-8c0cfc8dbc0c',
-		_label: 'TvShow',
-		title: 'Suits'
-	}],
-	nextEvent: {
+        _label: 'TvShow',
+        title: 'Suits'
+    }],
+    nextEvent: {
         uuid: '23ceb866-c564-462a-8784-8c0cfc8dbc0d'
-		_label: 'Event',
-		city: 'Seattle',
-		name: 'The International',
-		location: {
-	    	"type": "Feature",
-	    	"properties": {},
-	    	"geometry": {
-	        	"type": "Point",
-	        	"coordinates": [
-	          	-122.32246398925781,
-	          	47.60431120244565
-	        ]
-	      }
-	    }
-	}
+        _label: 'Event',
+        city: 'Seattle',
+        name: 'The International',
+        location: {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                -122.32246398925781,
+                47.60431120244565
+            ]
+          }
+        }
+    }
 }
 ```
 
@@ -171,30 +171,30 @@ As you can see, each object had an uuid assigned that you can use to update them
 ```javascript
 geograph.save({
     uuid: '23ceb866-c564-462a-8784-8c0cfc8dbc0a'
-	_label: 'Person',
-	name: 'Diego de Oliveira',
+    _label: 'Person',
+    name: 'Diego de Oliveira',
     age: 24,  
-	interests: [{
+    interests: [{
         _label: 'Movie',
         name: 'Interestellar'
     }],
-	nextEvent: {
+    nextEvent: {
         uuid: '23ceb866-c564-462a-8784-8c0cfc8dbc0d'
-		_label: 'Event'
-		city: null,
-		name: 'The International',
-		location: {
-	    	"type": "Feature",
-	    	"properties": {},
-	    	"geometry": {
-	        	"type": "Point",
-	        	"coordinates": [
-	          	-122.32246398925981,
-	          	47.60431120244568
-	        ]
-	      }
-	    }
-	}
+        _label: 'Event'
+        city: null,
+        name: 'The International',
+        location: {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -122.32246398925981,
+                    47.60431120244568
+            ]
+          }
+        }
+    }
 })
 ```
 The code above do the following:
