@@ -8,14 +8,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@gitlab.com/dodiego/GeoGraph.git"
+    "url": "https://github.com/dodiego/GeoGraph"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://gitlab.com/dodiego/GeoGraph/issues"
+    "url": "https://github.com/dodiego/GeoGraph"
   },
-  "homepage": "https://gitlab.com/dodiego/GeoGraph#README",
+  "homepage": "https://github.com/dodiego/GeoGraph#README",
   "dependencies": {
     "async": "^2.1.4",
     "bluebird": "^3.4.7",
