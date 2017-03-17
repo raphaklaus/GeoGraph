@@ -15,8 +15,19 @@ Schema free, easy to use, polyglot database solution for general persistence wit
 `npm test`
 
 
-# Tutorial 
-## Installing pre-requisites
+# Installing pre-requisites
+
+## Via Docker
+
+Use [this Docker Compose](https://github.com/dodiego/GeoGraph/blob/master/docker-compose.yml) and run:
+
+`docker-compose up -d`
+
+And everything will be running.
+
+**Important: do not share the ports with your host in production environments**
+
+## Manual
 
 ### Neo4j
 [Download and install neo4j for your platform](https://neo4j.com/download/) - Community version is fine

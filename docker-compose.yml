@@ -1,0 +1,15 @@
+version: '2'
+services:
+  postgres:
+    image: mdillon/postgis
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=yourpassword
+  neoj4j:
+    image: neo4j
+    environment:
+      - NEO4J_AUTH=none
+    ports:
+      - "7474:7474"
+      - "7687:7687"
