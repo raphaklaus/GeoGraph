@@ -19,7 +19,7 @@ Schema free, easy to use, polyglot database solution for general persistence wit
 
 ## Via Docker
 
-Use [this Docker Compose](https://github.com/dodiego/GeoGraph/blob/master/docker-compose.yml) and run:
+Use [this Docker Compose](docker-compose.yml) and run:
 
 `docker-compose up -d`
 
